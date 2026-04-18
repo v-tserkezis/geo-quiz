@@ -101,6 +101,16 @@ const T = {
     navigator: "Πλοηγός",
     geographer: "Γεωγράφος",
     master: "Μάστερ",
+    aiMode: "AI Mode",
+    aiProvider: "AI Provider",
+    aiApiKey: "API Key",
+    aiSave: "Αποθήκευση",
+    aiActive: "Ενεργό",
+    aiNoKey: "Χωρίς key",
+    aiInvalidKey: "Μη έγκυρο key",
+    aiGenerating: "Δημιουργία ερωτήσεων...",
+    aiError: "Σφάλμα AI, χρήση τοπικών ερωτήσεων",
+    aiDelete: "Διαγραφή",
   },
   en: {
     appTitle: "GeoLearn",
@@ -157,6 +167,16 @@ const T = {
     navigator: "Navigator",
     geographer: "Geographer",
     master: "Master",
+    aiMode: "AI Mode",
+    aiProvider: "AI Provider",
+    aiApiKey: "API Key",
+    aiSave: "Save",
+    aiActive: "Active",
+    aiNoKey: "No key",
+    aiInvalidKey: "Invalid key",
+    aiGenerating: "Generating questions...",
+    aiError: "AI error, using local questions",
+    aiDelete: "Delete",
   },
 };
 
@@ -195,6 +215,74 @@ function shuffle(arr) {
   return a;
 }
 
+// ─── AI PROVIDERS ─────────────────────────────────────────────────────
+const AI_PROVIDERS = {
+  anthropic: {
+    name: "Anthropic (Claude)",
+    model: "claude-haiku-4-5-20251001",
+    url: "https://api.anthropic.com/v1/messages",
+    makeRequest: (apiKey, prompt) => ({
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 2048, messages: [{ role: "user", content: prompt }] }),
+    }),
+    parseResponse: (data) => {
+      const text = data.content?.[0]?.text || "";
+      return JSON.parse(text.match(/\[[\s\S]*\]/)?.[0] || "[]");
+    },
+  },
+  openai: {
+    name: "OpenAI (ChatGPT)",
+    model: "gpt-4o-mini",
+    url: "https://api.openai.com/v1/chat/completions",
+    makeRequest: (apiKey, prompt) => ({
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
+      body: JSON.stringify({ model: "gpt-4o-mini", max_tokens: 2048, messages: [{ role: "user", content: prompt }] }),
+    }),
+    parseResponse: (data) => {
+      const text = data.choices?.[0]?.message?.content || "";
+      return JSON.parse(text.match(/\[[\s\S]*\]/)?.[0] || "[]");
+    },
+  },
+  google: {
+    name: "Google (Gemini)",
+    model: "gemini-2.0-flash-lite",
+    url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent",
+    makeRequest: (apiKey, prompt) => ({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      urlSuffix: "?key=" + apiKey,
+    }),
+    parseResponse: (data) => {
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      return JSON.parse(text.match(/\[[\s\S]*\]/)?.[0] || "[]");
+    },
+  },
+};
+
+async function fetchAIQuestions(provider, apiKey, categoryLabel, count, langCode) {
+  const prov = AI_PROVIDERS[provider];
+  if (!prov || !apiKey) return null;
+  const langName = langCode === "el" ? "Greek" : "English";
+  const prompt = `Generate exactly ${count} multiple choice geography quiz questions about "${categoryLabel}" for elementary school children. Language: ${langName}. Return ONLY a JSON array, no markdown, no explanation. Each element: {"q":"question","a":"correct answer","o":["wrong1","wrong2","wrong3"]}. Make questions varied and educational. All text must be in ${langName}.`;
+  try {
+    const reqOpts = prov.makeRequest(apiKey, prompt);
+    const url = prov.url + (reqOpts.urlSuffix || "");
+    delete reqOpts.urlSuffix;
+    const res = await fetch(url, reqOpts);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    const questions = prov.parseResponse(data);
+    if (!Array.isArray(questions) || questions.length === 0) throw new Error("Empty response");
+    return questions.filter(q => q.q && q.a && Array.isArray(q.o) && q.o.length >= 3);
+  } catch (e) {
+    console.error("AI fetch error:", e);
+    return null;
+  }
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────
 function App() {
   const [lang, setLang] = useState("el");
@@ -213,6 +301,12 @@ function App() {
   const [showReset, setShowReset] = useState(false);
   const [questionsPerRound, setQuestionsPerRound] = useState(10);
   const [animating, setAnimating] = useState(false);
+  const [aiProvider, setAiProvider] = useState("anthropic");
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [aiMode, setAiMode] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiKeyInput, setAiKeyInput] = useState("");
+  const [aiStatus, setAiStatus] = useState("");
   const t = T[lang];
   const skin = SKINS[skinIdx];
 
@@ -241,6 +335,10 @@ function App() {
       if (savedTheme) setThemeMode(savedTheme);
       const savedQpr = localStorage.getItem("geo-quiz-qpr");
       if (savedQpr) setQuestionsPerRound(Number(savedQpr));
+      const savedAiKey = localStorage.getItem("geo-quiz-ai-key");
+      const savedAiProv = localStorage.getItem("geo-quiz-ai-provider");
+      if (savedAiKey) { setAiApiKey(savedAiKey); setAiKeyInput(savedAiKey); setAiMode(true); setAiStatus("ok"); }
+      if (savedAiProv) setAiProvider(savedAiProv);
     } catch {}
   }, []);
 
@@ -261,7 +359,31 @@ function App() {
     return lv;
   }, [totalStars]);
 
-  const startQuiz = (cat) => {
+  const startQuiz = async (cat) => {
+    const catLabel = t[cat.labelKey] || cat.labelKey;
+    const regionLabel = t[cat.region] || cat.region;
+    const fullLabel = regionLabel + " - " + catLabel;
+
+    if (aiMode && aiApiKey) {
+      setAiLoading(true);
+      setCurrentCat(cat);
+      setScreen("quiz");
+      const aiQuestions = await fetchAIQuestions(aiProvider, aiApiKey, fullLabel, questionsPerRound, lang);
+      setAiLoading(false);
+      if (aiQuestions && aiQuestions.length > 0) {
+        const prepared = aiQuestions.map((q) => {
+          const options = shuffle([q.a, ...q.o.slice(0, 3)]);
+          return { ...q, options };
+        });
+        setQuestions(prepared);
+        setQIdx(0);
+        setScore(0);
+        setSelectedAns(null);
+        setAnswered(false);
+        return;
+      }
+    }
+    // Fallback to static data
     const data = DATA[lang][cat.region][cat.sub].questions;
     const shuffled = shuffle(data).slice(0, Math.min(questionsPerRound, data.length));
     const prepared = shuffled.map((q) => {
@@ -754,6 +876,13 @@ function App() {
 
   // ─── RENDER QUIZ ───
   const renderQuiz = () => {
+    if (aiLoading) return (
+      <div style={{ ...styles.quizContainer, textAlign: "center", paddingTop: 80 }}>
+        <MI name="auto_awesome" size={48} color={accentColor} />
+        <div style={{ fontSize: 18, fontWeight: 700, marginTop: 16, color: accentColor }}>{t.aiGenerating}</div>
+        <div style={{ marginTop: 12, opacity: 0.6, fontSize: 14 }}>{AI_PROVIDERS[aiProvider]?.name}</div>
+      </div>
+    );
     if (!questions.length) return null;
     const q = questions[qIdx];
     const isCorrect = selectedAns === q.a;
@@ -916,6 +1045,77 @@ function App() {
           </div>
         </div>
 
+        <div style={{ ...styles.settingsRow, flexDirection: "column", alignItems: "stretch", gap: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={styles.settingsLabel}><MI name="auto_awesome" size={16} color={accentColor} /> {t.aiMode}</span>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12,
+              background: aiMode ? skin.correct + "22" : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+              color: aiMode ? skin.correct : textColor,
+            }}>
+              {aiMode ? t.aiActive : t.aiNoKey}
+            </span>
+          </div>
+          <div>
+            <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.7 }}>{t.aiProvider}</span>
+            <div style={{ ...styles.pillGroup, marginTop: 6 }}>
+              {Object.entries(AI_PROVIDERS).map(([key, prov]) => (
+                <button
+                  key={key}
+                  style={styles.pill(aiProvider === key)}
+                  onClick={() => { setAiProvider(key); try { localStorage.setItem("geo-quiz-ai-provider", key); } catch {} }}
+                >
+                  {prov.name.split(" ")[0]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.7 }}>{t.aiApiKey}</span>
+            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+              <input
+                type="password"
+                value={aiKeyInput}
+                onChange={(e) => setAiKeyInput(e.target.value)}
+                placeholder={aiProvider === "anthropic" ? "sk-ant-..." : aiProvider === "openai" ? "sk-..." : "AIza..."}
+                style={{
+                  flex: 1, padding: "8px 12px", borderRadius: 10, fontSize: 13,
+                  border: `2px solid ${isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`,
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)",
+                  color: textColor, fontFamily: "monospace", outline: "none",
+                }}
+              />
+              <button
+                style={{ ...styles.pill(true), padding: "8px 16px" }}
+                onClick={() => {
+                  if (aiKeyInput.trim()) {
+                    setAiApiKey(aiKeyInput.trim());
+                    setAiMode(true);
+                    setAiStatus("ok");
+                    try {
+                      localStorage.setItem("geo-quiz-ai-key", aiKeyInput.trim());
+                      localStorage.setItem("geo-quiz-ai-provider", aiProvider);
+                    } catch {}
+                  }
+                }}
+              >
+                {t.aiSave}
+              </button>
+              {aiApiKey && (
+                <button
+                  style={{ ...styles.pill(false), padding: "8px 12px", color: skin.wrong, borderColor: skin.wrong }}
+                  onClick={() => {
+                    setAiApiKey(""); setAiKeyInput(""); setAiMode(false); setAiStatus("");
+                    try { localStorage.removeItem("geo-quiz-ai-key"); } catch {}
+                  }}
+                >
+                  <MI name="delete" size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div style={{ ...styles.settingsRow, borderBottom: "none" }}>
           <span style={styles.settingsLabel}><MI name="star" size={16} color={skin.star} /> {t.totalStars}: {totalStars}</span>
           {!showReset ? (
@@ -953,7 +1153,7 @@ function App() {
       <div style={styles.header}>
         <div>
           <div style={styles.title}>{t.appTitle}</div>
-          <div style={styles.subtitle}>{t.appSubtitle}</div>
+          <div style={styles.subtitle}>{t.appSubtitle} {aiMode && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, background: skin.correct + "22", color: skin.correct, padding: "1px 8px", borderRadius: 8, fontSize: 11, fontWeight: 800, marginLeft: 6, verticalAlign: "middle" }}><MI name="auto_awesome" size={12} /> AI</span>}</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {(screen === "quiz" || screen === "results") && (
