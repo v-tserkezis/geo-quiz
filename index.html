@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ΓεωΜάθηση - Geography Quiz</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Nunito', 'Segoe UI', sans-serif; }
+    button { font-family: inherit; }
+    #root { min-height: 100vh; }
+    .loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; font-size: 18px; font-weight: 700; color: #0077b6; }
+  </style>
+</head>
+<body>
+  <div id="root"><div class="loading">Φόρτωση...</div></div>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel" data-type="module">
+    const { useState, useEffect, useCallback, useMemo } = React;
+
+    // DATA will be loaded from data.json
+    let DATA = null;
+
+// ─── MATERIAL ICON HELPER ────────────────────────────────────────────
+const MI = ({ name, size = 24, color, style: extraStyle }) => (
+  <span
+    className="material-symbols-rounded"
+    style={{
+      fontSize: size,
+      color: color || "inherit",
+      lineHeight: 1,
+      verticalAlign: "middle",
+      fontVariationSettings: "'FILL' 1, 'wght' 500",
+      ...extraStyle,
+    }}
+  >
+    {name}
+  </span>
+);
+
+// ─── TRANSLATIONS ────────────────────────────────────────────────────
+const T = {
+  el: {
+    appTitle: "ΓεωΜάθηση",
+    appSubtitle: "Εξάσκηση στη Γεωγραφία",
+    greece: "Ελλάδα",
+    europe: "Ευρώπη",
+    world: "Κόσμος",
+    greeceRegions: "Γεωγρ. Διαμερίσματα & Νομοί",
+    greeceSeas: "Θάλασσες & Πελάγη",
+    greeceRivers: "Ποταμοί & Λίμνες",
+    greeceMountains: "Βουνά & Πεδιάδες",
+    europeCountries: "Χώρες & Πρωτεύουσες",
+    europeRivers: "Ποταμοί, Βουνά, Λίμνες",
+    europeSeas: "Θάλασσες & Ωκεανοί",
+    worldContinents: "Ήπειροι, Χώρες & Πρωτεύουσες",
+    worldSeas: "Θάλασσες & Ωκεανοί",
+    worldRivers: "Ποταμοί, Λίμνες & Βουνά",
+    question: "Ερώτηση",
+    of: "από",
+    score: "Σκορ",
+    correct: "Σωστό!",
+    wrong: "Λάθος!",
+    theCorrectAnswer: "Η σωστή απάντηση είναι:",
+    next: "Επόμενη",
+    finish: "Τέλος",
+    results: "Αποτελέσματα",
+    youGot: "Πήρες",
+    outOf: "στις",
+    excellent: "Εξαιρετικά!",
+    great: "Πολύ καλά!",
+    good: "Καλά!",
+    tryAgain: "Προσπάθησε ξανά!",
+    playAgain: "Ξανά",
+    backToMenu: "Μενού",
+    settings: "Ρυθμίσεις",
+    theme: "Θέμα",
+    skin: "Χρώμα",
+    language: "Γλώσσα",
+    dark: "Σκούρο",
+    light: "Φωτεινό",
+    auto: "Αυτόματο",
+    progress: "Πρόοδος",
+    level: "Επίπεδο",
+    stars: "Αστέρια",
+    totalStars: "Συνολικά αστέρια",
+    questionsPerRound: "Ερωτήσεις ανά γύρο",
+    close: "Κλείσιμο",
+    resetProgress: "Μηδενισμός προόδου",
+    confirmReset: "Σίγουρα θέλεις να μηδενίσεις την πρόοδο;",
+    yes: "Ναι",
+    no: "Όχι",
+    explorer: "Εξερευνητής",
+    traveler: "Ταξιδευτής",
+    navigator: "Πλοηγός",
+    geographer: "Γεωγράφος",
+    master: "Μάστερ",
+  },
+  en: {
+    appTitle: "GeoLearn",
+    appSubtitle: "Geography Practice",
+    greece: "Greece",
+    europe: "Europe",
+    world: "World",
+    greeceRegions: "Regions & Prefectures",
+    greeceSeas: "Seas & Gulfs",
+    greeceRivers: "Rivers & Lakes",
+    greeceMountains: "Mountains & Plains",
+    europeCountries: "Countries & Capitals",
+    europeRivers: "Rivers, Mountains, Lakes",
+    europeSeas: "Seas & Oceans",
+    worldContinents: "Continents, Countries & Capitals",
+    worldSeas: "Seas & Oceans",
+    worldRivers: "Rivers, Lakes & Mountains",
+    question: "Question",
+    of: "of",
+    score: "Score",
+    correct: "Correct!",
+    wrong: "Wrong!",
+    theCorrectAnswer: "The correct answer is:",
+    next: "Next",
+    finish: "Finish",
+    results: "Results",
+    youGot: "You got",
+    outOf: "out of",
+    excellent: "Excellent!",
+    great: "Great job!",
+    good: "Good!",
+    tryAgain: "Try again!",
+    playAgain: "Play Again",
+    backToMenu: "Menu",
+    settings: "Settings",
+    theme: "Theme",
+    skin: "Skin",
+    language: "Language",
+    dark: "Dark",
+    light: "Light",
+    auto: "Auto",
+    progress: "Progress",
+    level: "Level",
+    stars: "Stars",
+    totalStars: "Total stars",
+    questionsPerRound: "Questions per round",
+    close: "Close",
+    resetProgress: "Reset Progress",
+    confirmReset: "Are you sure you want to reset all progress?",
+    yes: "Yes",
+    no: "No",
+    explorer: "Explorer",
+    traveler: "Traveler",
+    navigator: "Navigator",
+    geographer: "Geographer",
+    master: "Master",
+  },
+};
+
+// ─── CATEGORY KEYS ────────────────────────────────────────────────────
+const CATEGORIES = [
+  { region: "greece", sub: "regions", labelKey: "greeceRegions", icon: "account_balance" },
+  { region: "greece", sub: "seas", labelKey: "greeceSeas", icon: "waves" },
+  { region: "greece", sub: "rivers", labelKey: "greeceRivers", icon: "water" },
+  { region: "greece", sub: "mountains", labelKey: "greeceMountains", icon: "landscape" },
+  { region: "europe", sub: "countries", labelKey: "europeCountries", icon: "flag" },
+  { region: "europe", sub: "rivers", labelKey: "europeRivers", icon: "terrain" },
+  { region: "europe", sub: "seas", labelKey: "europeSeas", icon: "sailing" },
+  { region: "world", sub: "continents", labelKey: "worldContinents", icon: "public" },
+  { region: "world", sub: "seas", labelKey: "worldSeas", icon: "scuba_diving" },
+  { region: "world", sub: "rivers", labelKey: "worldRivers", icon: "volcano" },
+];
+
+// ─── SKINS ────────────────────────────────────────────────────────────
+const SKINS = [
+  { name: "Ocean", accent: "#0077b6", accentLight: "#90e0ef", bg: "#caf0f8", bgDark: "#023e8a", card: "#ffffff", cardDark: "#014f86", text: "#023047", textDark: "#caf0f8", correct: "#06d6a0", wrong: "#ef476f", star: "#ffd166" },
+  { name: "Forest", accent: "#2d6a4f", accentLight: "#95d5b2", bg: "#d8f3dc", bgDark: "#1b4332", card: "#ffffff", cardDark: "#2d6a4f", text: "#1b4332", textDark: "#d8f3dc", correct: "#06d6a0", wrong: "#e63946", star: "#ffb703" },
+  { name: "Sunset", accent: "#e76f51", accentLight: "#f4a261", bg: "#fefae0", bgDark: "#3d2c2c", card: "#ffffff", cardDark: "#5a3030", text: "#432818", textDark: "#fefae0", correct: "#06d6a0", wrong: "#d62828", star: "#f4a261" },
+  { name: "Berry", accent: "#9b5de5", accentLight: "#c77dff", bg: "#f3e8ff", bgDark: "#2b1055", card: "#ffffff", cardDark: "#3c1a78", text: "#2b1055", textDark: "#f3e8ff", correct: "#00f5d4", wrong: "#ff006e", star: "#fee440" },
+  { name: "Candy", accent: "#f72585", accentLight: "#ff85a1", bg: "#fff0f3", bgDark: "#3a0519", card: "#ffffff", cardDark: "#590d2a", text: "#590d2a", textDark: "#fff0f3", correct: "#06d6a0", wrong: "#e63946", star: "#ffc300" },
+];
+
+const LEVELS = ["explorer", "traveler", "navigator", "geographer", "master"];
+const LEVEL_THRESHOLDS = [0, 10, 30, 60, 100];
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────
+function App() {
+  const [lang, setLang] = useState("el");
+  const [skinIdx, setSkinIdx] = useState(0);
+  const [themeMode, setThemeMode] = useState("auto");
+  const [isDark, setIsDark] = useState(false);
+  const [screen, setScreen] = useState("menu"); // menu | subcategory | quiz | results | settings
+  const [selectedRegion, setSelectedRegion] = useState(null);
+  const [currentCat, setCurrentCat] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [qIdx, setQIdx] = useState(0);
+  const [selectedAns, setSelectedAns] = useState(null);
+  const [score, setScore] = useState(0);
+  const [answered, setAnswered] = useState(false);
+  const [progress, setProgress] = useState({});
+  const [showReset, setShowReset] = useState(false);
+  const [questionsPerRound, setQuestionsPerRound] = useState(10);
+  const [animating, setAnimating] = useState(false);
+  const t = T[lang];
+  const skin = SKINS[skinIdx];
+
+  // Auto theme
+  useEffect(() => {
+    if (themeMode === "auto") {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      setIsDark(mq.matches);
+      const handler = (e) => setIsDark(e.matches);
+      mq.addEventListener("change", handler);
+      return () => mq.removeEventListener("change", handler);
+    }
+    setIsDark(themeMode === "dark");
+  }, [themeMode]);
+
+  // Load progress
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("geo-quiz-progress");
+      if (saved) setProgress(JSON.parse(saved));
+      const savedLang = localStorage.getItem("geo-quiz-lang");
+      if (savedLang) setLang(savedLang);
+      const savedSkin = localStorage.getItem("geo-quiz-skin");
+      if (savedSkin) setSkinIdx(Number(savedSkin));
+      const savedTheme = localStorage.getItem("geo-quiz-theme");
+      if (savedTheme) setThemeMode(savedTheme);
+      const savedQpr = localStorage.getItem("geo-quiz-qpr");
+      if (savedQpr) setQuestionsPerRound(Number(savedQpr));
+    } catch {}
+  }, []);
+
+  const saveProgress = useCallback(
+    (p) => {
+      setProgress(p);
+      try { localStorage.setItem("geo-quiz-progress", JSON.stringify(p)); } catch {}
+    },
+    []
+  );
+
+  const totalStars = useMemo(() => Object.values(progress).reduce((s, v) => s + (v.stars || 0), 0), [progress]);
+  const levelIdx = useMemo(() => {
+    let lv = 0;
+    for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
+      if (totalStars >= LEVEL_THRESHOLDS[i]) { lv = i; break; }
+    }
+    return lv;
+  }, [totalStars]);
+
+  const startQuiz = (cat) => {
+    const data = DATA[lang][cat.region][cat.sub].questions;
+    const shuffled = shuffle(data).slice(0, Math.min(questionsPerRound, data.length));
+    const prepared = shuffled.map((q) => {
+      const options = shuffle([q.a, ...q.o]);
+      return { ...q, options };
+    });
+    setCurrentCat(cat);
+    setQuestions(prepared);
+    setQIdx(0);
+    setScore(0);
+    setSelectedAns(null);
+    setAnswered(false);
+    setScreen("quiz");
+  };
+
+  const handleAnswer = (ans) => {
+    if (answered) return;
+    setSelectedAns(ans);
+    setAnswered(true);
+    if (ans === questions[qIdx].a) setScore((s) => s + 1);
+  };
+
+  const nextQuestion = () => {
+    if (qIdx + 1 >= questions.length) {
+      // Calculate stars
+      const pct = score / questions.length;
+      let stars = 0;
+      if (pct >= 0.9) stars = 3;
+      else if (pct >= 0.7) stars = 2;
+      else if (pct >= 0.5) stars = 1;
+      const key = `${currentCat.region}-${currentCat.sub}`;
+      const prev = progress[key] || { stars: 0, best: 0, plays: 0 };
+      const newP = {
+        ...progress,
+        [key]: {
+          stars: Math.max(prev.stars, stars),
+          best: Math.max(prev.best, score),
+          plays: prev.plays + 1,
+        },
+      };
+      saveProgress(newP);
+      setScreen("results");
+      return;
+    }
+    setAnimating(true);
+    setTimeout(() => {
+      setQIdx((i) => i + 1);
+      setSelectedAns(null);
+      setAnswered(false);
+      setAnimating(false);
+    }, 200);
+  };
+
+  const bg = isDark ? skin.bgDark : skin.bg;
+  const cardBg = isDark ? skin.cardDark : skin.card;
+  const textColor = isDark ? skin.textDark : skin.text;
+  const accentColor = skin.accent;
+  const accentLightColor = skin.accentLight;
+
+  const styles = {
+    app: {
+      minHeight: "100vh",
+      background: bg,
+      color: textColor,
+      fontFamily: "'Nunito', 'Segoe UI', sans-serif",
+      transition: "background 0.4s, color 0.4s",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      padding: "0 16px 32px",
+      overflowX: "hidden",
+    },
+    header: {
+      width: "100%",
+      maxWidth: 600,
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "16px 0 8px",
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: 900,
+      letterSpacing: "-0.5px",
+      color: accentColor,
+      textShadow: isDark ? "0 2px 12px rgba(0,0,0,0.3)" : "none",
+    },
+    subtitle: {
+      fontSize: 13,
+      opacity: 0.7,
+      marginTop: -4,
+      fontWeight: 600,
+    },
+    settingsBtn: {
+      background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)",
+      border: "none",
+      borderRadius: 12,
+      padding: "8px 14px",
+      cursor: "pointer",
+      color: textColor,
+      fontSize: 14,
+      fontWeight: 700,
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      transition: "all 0.2s",
+    },
+    levelBadge: {
+      width: "100%",
+      maxWidth: 600,
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "10px 16px",
+      background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+      borderRadius: 14,
+      marginBottom: 16,
+    },
+    levelIcon: { fontSize: 28 },
+    levelInfo: { flex: 1 },
+    levelName: { fontWeight: 800, fontSize: 14, color: accentColor },
+    starCount: { fontSize: 12, opacity: 0.8 },
+    progressBar: {
+      height: 6,
+      borderRadius: 3,
+      background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)",
+      marginTop: 4,
+      overflow: "hidden",
+    },
+    progressFill: (pct) => ({
+      height: "100%",
+      width: `${pct}%`,
+      borderRadius: 3,
+      background: `linear-gradient(90deg, ${accentColor}, ${accentLightColor})`,
+      transition: "width 0.6s ease",
+    }),
+    regionTitle: {
+      width: "100%",
+      maxWidth: 600,
+      fontSize: 18,
+      fontWeight: 800,
+      margin: "18px 0 8px",
+      color: accentColor,
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+    },
+    catGrid: {
+      width: "100%",
+      maxWidth: 600,
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 10,
+    },
+    catCard: (catKey) => {
+      const p = progress[catKey];
+      const stars = p ? p.stars : 0;
+      return {
+        background: cardBg,
+        borderRadius: 16,
+        padding: "16px 14px",
+        cursor: "pointer",
+        border: `2px solid ${stars >= 3 ? skin.star : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`,
+        transition: "all 0.2s",
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        position: "relative",
+        overflow: "hidden",
+        boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.3)" : "0 2px 12px rgba(0,0,0,0.06)",
+      };
+    },
+    catIcon: { fontSize: 24 },
+    catLabel: { fontSize: 13, fontWeight: 700, lineHeight: 1.3 },
+    catStars: { fontSize: 16 },
+    // Quiz
+    quizContainer: {
+      width: "100%",
+      maxWidth: 560,
+      marginTop: 16,
+    },
+    quizProgress: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 16,
+      fontSize: 14,
+      fontWeight: 700,
+      opacity: 0.8,
+    },
+    quizCard: {
+      background: cardBg,
+      borderRadius: 20,
+      padding: "28px 24px",
+      boxShadow: isDark ? "0 8px 32px rgba(0,0,0,0.4)" : "0 4px 24px rgba(0,0,0,0.08)",
+      opacity: animating ? 0 : 1,
+      transform: animating ? "translateX(40px)" : "translateX(0)",
+      transition: "all 0.2s ease",
+    },
+    questionText: {
+      fontSize: 18,
+      fontWeight: 800,
+      lineHeight: 1.5,
+      marginBottom: 20,
+      color: textColor,
+    },
+    optionBtn: (opt) => {
+      let bg2 = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.04)";
+      let border = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)";
+      let col = textColor;
+      if (answered) {
+        if (opt === questions[qIdx]?.a) { bg2 = skin.correct + "22"; border = skin.correct; col = isDark ? "#fff" : skin.correct; }
+        else if (opt === selectedAns) { bg2 = skin.wrong + "22"; border = skin.wrong; col = isDark ? "#fff" : skin.wrong; }
+      } else if (opt === selectedAns) {
+        bg2 = accentColor + "15";
+        border = accentColor;
+      }
+      return {
+        width: "100%",
+        padding: "14px 18px",
+        borderRadius: 14,
+        border: `2px solid ${border}`,
+        background: bg2,
+        color: col,
+        fontSize: 15,
+        fontWeight: 700,
+        cursor: answered ? "default" : "pointer",
+        textAlign: "left",
+        transition: "all 0.2s",
+        marginBottom: 8,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+      };
+    },
+    feedback: (isCorrect) => ({
+      marginTop: 16,
+      padding: "12px 16px",
+      borderRadius: 12,
+      background: isCorrect ? skin.correct + "20" : skin.wrong + "20",
+      color: isCorrect ? skin.correct : skin.wrong,
+      fontWeight: 700,
+      fontSize: 14,
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+    }),
+    nextBtn: {
+      marginTop: 16,
+      width: "100%",
+      padding: "14px",
+      borderRadius: 14,
+      border: "none",
+      background: `linear-gradient(135deg, ${accentColor}, ${accentLightColor})`,
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: 800,
+      cursor: "pointer",
+      transition: "all 0.2s",
+      boxShadow: `0 4px 16px ${accentColor}44`,
+    },
+    // Results
+    resultsCard: {
+      background: cardBg,
+      borderRadius: 24,
+      padding: "36px 28px",
+      textAlign: "center",
+      boxShadow: isDark ? "0 8px 40px rgba(0,0,0,0.4)" : "0 4px 24px rgba(0,0,0,0.08)",
+      maxWidth: 420,
+      width: "100%",
+      marginTop: 40,
+    },
+    bigScore: {
+      fontSize: 64,
+      fontWeight: 900,
+      color: accentColor,
+      lineHeight: 1,
+    },
+    resultStars: { fontSize: 36, margin: "12px 0" },
+    resultMsg: { fontSize: 18, fontWeight: 700, marginBottom: 20 },
+    btnRow: { display: "flex", gap: 10 },
+    outlineBtn: {
+      flex: 1,
+      padding: "12px",
+      borderRadius: 12,
+      border: `2px solid ${accentColor}`,
+      background: "transparent",
+      color: accentColor,
+      fontSize: 14,
+      fontWeight: 700,
+      cursor: "pointer",
+    },
+    // Settings
+    settingsPanel: {
+      background: cardBg,
+      borderRadius: 24,
+      padding: "28px 24px",
+      maxWidth: 480,
+      width: "100%",
+      marginTop: 24,
+      boxShadow: isDark ? "0 8px 40px rgba(0,0,0,0.4)" : "0 4px 24px rgba(0,0,0,0.08)",
+    },
+    settingsTitle: {
+      fontSize: 22,
+      fontWeight: 800,
+      marginBottom: 20,
+      color: accentColor,
+    },
+    settingsRow: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "12px 0",
+      borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`,
+    },
+    settingsLabel: { fontWeight: 700, fontSize: 14 },
+    pillGroup: { display: "flex", gap: 6 },
+    pill: (active) => ({
+      padding: "6px 14px",
+      borderRadius: 20,
+      border: `2px solid ${active ? accentColor : "transparent"}`,
+      background: active ? accentColor + "20" : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+      color: active ? accentColor : textColor,
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer",
+      transition: "all 0.2s",
+    }),
+    skinDot: (idx) => ({
+      width: 28,
+      height: 28,
+      borderRadius: "50%",
+      background: `linear-gradient(135deg, ${SKINS[idx].accent}, ${SKINS[idx].accentLight})`,
+      border: idx === skinIdx ? `3px solid ${textColor}` : "3px solid transparent",
+      cursor: "pointer",
+      transition: "all 0.2s",
+    }),
+    dotBadge: {
+      height: 8,
+      width: 8,
+      borderRadius: "50%",
+      display: "inline-block",
+    },
+  };
+
+  // ─── RENDER MENU (Region selection) ───
+  const renderMenu = () => {
+    const regions = [
+      { key: "greece", icon: "location_city", emoji: "account_balance" },
+      { key: "europe", icon: "euro", emoji: "flag" },
+      { key: "world", icon: "public", emoji: "globe" },
+    ];
+    return (
+      <div style={{ width: "100%", maxWidth: 600 }}>
+        {/* Level badge */}
+        <div style={styles.levelBadge}>
+          <div style={styles.levelIcon}>{<MI name={["explore", "flight_takeoff", "map", "architecture", "emoji_events"][levelIdx]} size={28} color={accentColor} />}</div>
+          <div style={styles.levelInfo}>
+            <div style={styles.levelName}>{t[LEVELS[levelIdx]]} — {t.level} {levelIdx + 1}</div>
+            <div style={styles.starCount}><MI name="star" size={14} color={skin.star} /> {totalStars} {t.stars}</div>
+            <div style={styles.progressBar}>
+              <div style={styles.progressFill(
+                levelIdx < 4
+                  ? ((totalStars - LEVEL_THRESHOLDS[levelIdx]) / (LEVEL_THRESHOLDS[levelIdx + 1] - LEVEL_THRESHOLDS[levelIdx])) * 100
+                  : 100
+              )} />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, opacity: 0.7, textAlign: "center" }}>
+          {lang === "el" ? "Επίλεξε περιοχή" : "Choose a region"}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {regions.map((r) => {
+            const cats = CATEGORIES.filter((c) => c.region === r.key);
+            const regionStars = cats.reduce((sum, cat) => {
+              const p = progress[`${cat.region}-${cat.sub}`];
+              return sum + (p ? p.stars : 0);
+            }, 0);
+            const maxStars = cats.length * 3;
+            return (
+              <div
+                key={r.key}
+                style={{
+                  background: cardBg,
+                  borderRadius: 20,
+                  padding: "22px 24px",
+                  cursor: "pointer",
+                  border: `2px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`,
+                  transition: "all 0.25s",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 16,
+                  boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.3)" : "0 2px 12px rgba(0,0,0,0.06)",
+                }}
+                onClick={() => { setSelectedRegion(r.key); setScreen("subcategory"); }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-3px) scale(1.01)"; e.currentTarget.style.boxShadow = `0 8px 28px ${accentColor}33`; e.currentTarget.style.borderColor = accentColor; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; e.currentTarget.style.borderColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"; }}
+              >
+                <div style={{ lineHeight: 1 }}><MI name={r.icon} size={42} color={accentColor} /></div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: accentColor }}>{t[r.key]}</div>
+                  <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>
+                    {cats.length} {lang === "el" ? "κατηγορίες" : "categories"}
+                  </div>
+                  <div style={{ ...styles.progressBar, marginTop: 8, height: 5 }}>
+                    <div style={styles.progressFill(maxStars > 0 ? (regionStars / maxStars) * 100 : 0)} />
+                  </div>
+                  <div style={{ fontSize: 11, opacity: 0.5, marginTop: 3, display: "flex", alignItems: "center", gap: 3 }}><MI name="star" size={13} color={skin.star} /> {regionStars}/{maxStars}</div>
+                </div>
+                <div><MI name="chevron_right" size={24} style={{ opacity: 0.4 }} /></div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // ─── RENDER SUBCATEGORY (after picking a region) ───
+  const renderSubcategory = () => {
+    if (!selectedRegion) return null;
+    const cats = CATEGORIES.filter((c) => c.region === selectedRegion);
+    const regionIcons = { greece: "location_city", europe: "euro", world: "public" };
+    return (
+      <div style={{ width: "100%", maxWidth: 600 }}>
+        {/* Back button + region title */}
+        <div
+          style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, cursor: "pointer" }}
+          onClick={() => setScreen("menu")}
+        >
+          <span style={{
+            width: 36, height: 36, borderRadius: 10,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+            color: accentColor,
+          }}><MI name="arrow_back" size={20} /></span>
+          <span style={{ fontSize: 24, fontWeight: 800, color: accentColor, display: "flex", alignItems: "center", gap: 8 }}>
+            <MI name={regionIcons[selectedRegion]} size={28} /> {t[selectedRegion]}
+          </span>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {cats.map((cat) => {
+            const key = `${cat.region}-${cat.sub}`;
+            const p = progress[key];
+            const stars = p ? p.stars : 0;
+            const qCount = DATA[lang][cat.region][cat.sub].questions.length;
+            return (
+              <div
+                key={key}
+                style={{
+                  background: cardBg,
+                  borderRadius: 16,
+                  padding: "18px 20px",
+                  cursor: "pointer",
+                  border: `2px solid ${stars >= 3 ? skin.star : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`,
+                  transition: "all 0.2s",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.3)" : "0 2px 12px rgba(0,0,0,0.06)",
+                }}
+                onClick={() => startQuiz(cat)}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 6px 24px ${accentColor}33`; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; }}
+              >
+                <MI name={cat.icon} size={28} color={accentColor} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700 }}>{t[cat.labelKey]}</div>
+                  <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>
+                    {qCount} {lang === "el" ? "ερωτήσεις" : "questions"}
+                    {p ? ` · Best: ${p.best}` : ""}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 2 }}>
+                  {[1, 2, 3].map((i) => (
+                    <MI key={i} name="star" size={18} color={skin.star} style={{ opacity: i <= stars ? 1 : 0.15 }} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // ─── RENDER QUIZ ───
+  const renderQuiz = () => {
+    if (!questions.length) return null;
+    const q = questions[qIdx];
+    const isCorrect = selectedAns === q.a;
+    return (
+      <div style={styles.quizContainer}>
+        <div style={styles.quizProgress}>
+          <span>{t.question} {qIdx + 1} {t.of} {questions.length}</span>
+          <span>{t.score}: {score}/{questions.length}</span>
+        </div>
+        {/* Mini progress dots */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>
+          {questions.map((_, i) => (
+            <div
+              key={i}
+              style={{
+                flex: 1,
+                height: 4,
+                borderRadius: 2,
+                background: i < qIdx ? skin.correct : i === qIdx ? accentColor : (isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"),
+                transition: "all 0.3s",
+              }}
+            />
+          ))}
+        </div>
+
+        <div style={styles.quizCard}>
+          <div style={styles.questionText}>{q.q}</div>
+          {q.options.map((opt, i) => (
+            <button
+              key={i}
+              style={styles.optionBtn(opt)}
+              onClick={() => handleAnswer(opt)}
+            >
+              <span style={{
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+                fontSize: 12,
+                fontWeight: 800,
+                flexShrink: 0,
+              }}>
+                {String.fromCharCode(65 + i)}
+              </span>
+              {opt}
+            </button>
+          ))}
+
+          {answered && (
+            <>
+              <div style={styles.feedback(isCorrect)}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}><MI name={isCorrect ? "check_circle" : "cancel"} size={20} /> {isCorrect ? t.correct : t.wrong}</span>
+                {!isCorrect && <span style={{ fontSize: 13, fontWeight: 600 }}>{t.theCorrectAnswer} {q.a}</span>}
+              </div>
+              <button style={styles.nextBtn} onClick={nextQuestion}>
+                {qIdx + 1 >= questions.length ? t.finish : t.next} <MI name="arrow_forward" size={18} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ─── RENDER RESULTS ───
+  const renderResults = () => {
+    const pct = score / questions.length;
+    let stars = 0;
+    if (pct >= 0.9) stars = 3;
+    else if (pct >= 0.7) stars = 2;
+    else if (pct >= 0.5) stars = 1;
+    const msg = pct >= 0.9 ? t.excellent : pct >= 0.7 ? t.great : pct >= 0.5 ? t.good : t.tryAgain;
+
+    return (
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <div style={styles.resultsCard}>
+          <div style={{ marginBottom: 8 }}><MI name="emoji_events" size={48} color={skin.star} /></div>
+          <div style={{ fontSize: 16, fontWeight: 700, opacity: 0.7, marginBottom: 8 }}>{t.results}</div>
+          <div style={styles.bigScore}>{score}/{questions.length}</div>
+          <div style={styles.resultStars}>
+            {[1, 2, 3].map((i) => (
+              <MI key={i} name="star" size={36} color={skin.star} style={{ opacity: i <= stars ? 1 : 0.2, transition: "opacity 0.5s", transitionDelay: `${i * 0.2}s` }} />
+            ))}
+          </div>
+          <div style={styles.resultMsg}>{msg}</div>
+          <div style={styles.btnRow}>
+            <button style={styles.outlineBtn} onClick={() => setScreen("subcategory")}>{t.backToMenu}</button>
+            <button style={styles.nextBtn} onClick={() => startQuiz(currentCat)}>{t.playAgain}</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── RENDER SETTINGS ───
+  const renderSettings = () => (
+    <div style={{ display: "flex", justifyContent: "center" }}>
+      <div style={styles.settingsPanel}>
+        <div style={styles.settingsTitle}><MI name="settings" size={22} /> {t.settings}</div>
+
+        <div style={styles.settingsRow}>
+          <span style={styles.settingsLabel}>{t.language}</span>
+          <div style={styles.pillGroup}>
+            {[["el", "Ελληνικά"], ["en", "English"]].map(([code, label]) => (
+              <button
+                key={code}
+                style={styles.pill(lang === code)}
+                onClick={() => { setLang(code); try { localStorage.setItem("geo-quiz-lang", code); } catch {} }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={styles.settingsRow}>
+          <span style={styles.settingsLabel}>{t.theme}</span>
+          <div style={styles.pillGroup}>
+            {["light", "dark", "auto"].map((mode) => (
+              <button
+                key={mode}
+                style={styles.pill(themeMode === mode)}
+                onClick={() => { setThemeMode(mode); try { localStorage.setItem("geo-quiz-theme", mode); } catch {} }}
+              >
+                {mode === "light" ? <MI name="light_mode" size={14} /> : mode === "dark" ? <MI name="dark_mode" size={14} /> : <MI name="brightness_auto" size={14} />} {t[mode]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={styles.settingsRow}>
+          <span style={styles.settingsLabel}>{t.skin}</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            {SKINS.map((s, i) => (
+              <div
+                key={i}
+                style={styles.skinDot(i)}
+                onClick={() => { setSkinIdx(i); try { localStorage.setItem("geo-quiz-skin", String(i)); } catch {} }}
+                title={s.name}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div style={styles.settingsRow}>
+          <span style={styles.settingsLabel}>{t.questionsPerRound}</span>
+          <div style={styles.pillGroup}>
+            {[5, 10, 15, 20].map((n) => (
+              <button
+                key={n}
+                style={styles.pill(questionsPerRound === n)}
+                onClick={() => { setQuestionsPerRound(n); try { localStorage.setItem("geo-quiz-qpr", String(n)); } catch {} }}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ ...styles.settingsRow, borderBottom: "none" }}>
+          <span style={styles.settingsLabel}><MI name="star" size={16} color={skin.star} /> {t.totalStars}: {totalStars}</span>
+          {!showReset ? (
+            <button style={{ ...styles.pill(false), color: skin.wrong }} onClick={() => setShowReset(true)}>
+              {t.resetProgress}
+            </button>
+          ) : (
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <span style={{ fontSize: 12 }}>{t.confirmReset}</span>
+              <button
+                style={{ ...styles.pill(false), color: skin.wrong, borderColor: skin.wrong }}
+                onClick={() => { saveProgress({}); setShowReset(false); }}
+              >
+                {t.yes}
+              </button>
+              <button style={styles.pill(false)} onClick={() => setShowReset(false)}>
+                {t.no}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <button
+          style={{ ...styles.nextBtn, marginTop: 20 }}
+          onClick={() => setScreen("menu")}
+        >
+          {t.close}
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={styles.app}>
+      <div style={styles.header}>
+        <div>
+          <div style={styles.title}>{t.appTitle}</div>
+          <div style={styles.subtitle}>{t.appSubtitle}</div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {(screen === "quiz" || screen === "results") && (
+            <button style={styles.settingsBtn} onClick={() => { setScreen("subcategory"); }}>
+              <MI name="arrow_back" size={18} /> {t.backToMenu}
+            </button>
+          )}
+          <button style={styles.settingsBtn} onClick={() => setScreen(screen === "settings" ? "menu" : "settings")}>
+            <MI name="settings" size={18} />
+          </button>
+        </div>
+      </div>
+
+      {screen === "menu" && renderMenu()}
+      {screen === "subcategory" && renderSubcategory()}
+      {screen === "quiz" && renderQuiz()}
+      {screen === "results" && renderResults()}
+      {screen === "settings" && renderSettings()}
+    </div>
+  );
+}
+
+
+    // ─── WRAPPER: Load data then render ──────────────────────────────
+    function AppWrapper() {
+      const [data, setData] = useState(null);
+      const [error, setError] = useState(null);
+
+      useEffect(() => {
+        fetch('./data.json')
+          .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .then(d => { DATA = d; setData(d); })
+          .catch(e => setError(e.message));
+      }, []);
+
+      if (error) return React.createElement('div', {className:'loading'}, 'Error loading data: ' + error);
+      if (!data) return React.createElement('div', {className:'loading'}, 'Φόρτωση...');
+      return React.createElement(App, null);
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(AppWrapper, null));
+  </script>
+</body>
+</html>
