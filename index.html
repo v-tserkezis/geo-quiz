@@ -337,8 +337,10 @@ function App() {
       if (savedQpr) setQuestionsPerRound(Number(savedQpr));
       const savedAiKey = localStorage.getItem("geo-quiz-ai-key");
       const savedAiProv = localStorage.getItem("geo-quiz-ai-provider");
-      if (savedAiKey) { setAiApiKey(savedAiKey); setAiKeyInput(savedAiKey); setAiMode(true); setAiStatus("ok"); }
+      const savedAiMode = localStorage.getItem("geo-quiz-ai-mode");
+      if (savedAiKey) { setAiApiKey(savedAiKey); setAiKeyInput(savedAiKey); setAiStatus("ok"); }
       if (savedAiProv) setAiProvider(savedAiProv);
+      if (savedAiKey && savedAiMode !== "off") setAiMode(true);
     } catch {}
   }, []);
 
@@ -1048,13 +1050,32 @@ function App() {
         <div style={{ ...styles.settingsRow, flexDirection: "column", alignItems: "stretch", gap: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={styles.settingsLabel}><MI name="auto_awesome" size={16} color={accentColor} /> {t.aiMode}</span>
-            <span style={{
-              fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12,
-              background: aiMode ? skin.correct + "22" : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
-              color: aiMode ? skin.correct : textColor,
-            }}>
-              {aiMode ? t.aiActive : t.aiNoKey}
-            </span>
+            {aiApiKey ? (
+              <button
+                onClick={() => {
+                  const next = !aiMode;
+                  setAiMode(next);
+                  try { localStorage.setItem("geo-quiz-ai-mode", next ? "on" : "off"); } catch {}
+                }}
+                style={{
+                  fontSize: 12, fontWeight: 800, padding: "5px 14px", borderRadius: 20, cursor: "pointer",
+                  border: `2px solid ${aiMode ? skin.correct : isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)"}`,
+                  background: aiMode ? skin.correct + "22" : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                  color: aiMode ? skin.correct : textColor,
+                  display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s",
+                }}
+              >
+                <MI name={aiMode ? "toggle_on" : "toggle_off"} size={18} /> {aiMode ? "ON" : "OFF"}
+              </button>
+            ) : (
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12,
+                background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+                color: textColor,
+              }}>
+                {t.aiNoKey}
+              </span>
+            )}
           </div>
           <div>
             <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.7 }}>{t.aiProvider}</span>
@@ -1095,6 +1116,7 @@ function App() {
                     try {
                       localStorage.setItem("geo-quiz-ai-key", aiKeyInput.trim());
                       localStorage.setItem("geo-quiz-ai-provider", aiProvider);
+                      localStorage.setItem("geo-quiz-ai-mode", "on");
                     } catch {}
                   }
                 }}
