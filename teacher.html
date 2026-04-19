@@ -322,7 +322,7 @@ function renderStudents() {
     return `<div class="card"><div class="empty-state">${MI("group",48)}<p>Δεν υπάρχουν δεδομένα μαθητών</p><small>Θα εμφανιστούν μόλις κάποιος παίξει quiz</small></div></div>`;
   }
   const rows = state.students.map(s => {
-    const avg = s.results.length > 0 ? Math.round(s.results.reduce((acc, r) => acc + (r.score||0), 0) / s.results.length) : 0;
+    const avg = s.results.length > 0 ? Math.round(s.results.reduce((acc, r) => acc + (r.pct||0), 0) / s.results.length) : 0;
     const lastDate = s.lastPlay ? s.lastPlay.toLocaleDateString("el-GR") : "-";
     return `
       <div class="student-row">
