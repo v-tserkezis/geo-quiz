@@ -167,8 +167,15 @@ function parseExcel(file) {
           const opts = [String(row[1]||"").trim(), String(row[2]||"").trim(), String(row[3]||"").trim(), String(row[4]||"").trim()].filter(Boolean);
           const correct = String(row[5] || "").trim();
           if (q && opts.length >= 2 && correct) {
-            const wrongOpts = opts.filter(o => o !== correct).slice(0, 3);
-            questions.push({ q, a: correct, o: wrongOpts });
+            let correctAnswer = correct;
+            const num = parseInt(correct);
+            if (num >= 1 && num <= 4 && opts[num - 1]) {
+              correctAnswer = opts[num - 1];
+            }
+            const wrongOpts = opts.filter(o => o !== correctAnswer).slice(0, 3);
+            if (wrongOpts.length > 0 && correctAnswer) {
+              questions.push({ q, a: correctAnswer, o: wrongOpts });
+            }
           }
         }
         resolve(questions);
@@ -230,7 +237,15 @@ function renderQuestions() {
         <div class="form-group"><label>Απάντηση Γ</label><input id="fc" placeholder="Επιλογή Γ" /></div>
         <div class="form-group"><label>Απάντηση Δ</label><input id="fd" placeholder="Επιλογή Δ" /></div>
       </div>
-      <div class="form-group"><label>Σωστή απάντηση (ακριβώς όπως παραπάνω)</label><input id="fcorrect" placeholder="π.χ. Παρίσι" /></div>
+      <div class="form-group"><label>Σωστή απάντηση</label>
+        <select id="fcorrect" style="width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;font-size:14px;outline:none;background:#fff">
+          <option value="">-- Επίλεξε --</option>
+          <option value="1">1 - Απάντηση Α</option>
+          <option value="2">2 - Απάντηση Β</option>
+          <option value="3">3 - Απάντηση Γ</option>
+          <option value="4">4 - Απάντηση Δ</option>
+        </select>
+      </div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary" onclick="saveQuestion()">${MI("save",16)} ${state.editingId ? "Ενημέρωση" : "Αποθήκευση"}</button>
         ${state.editingId ? `<button class="btn btn-outline" onclick="cancelEdit()">Ακύρωση</button>` : ""}
@@ -359,17 +374,18 @@ window.saveQuestion = async function() {
     document.getElementById("fc").value.trim(),
     document.getElementById("fd").value.trim(),
   ].filter(Boolean);
-  const correct = document.getElementById("fcorrect").value.trim();
+  const correctIdx = parseInt(document.getElementById("fcorrect").value);
 
-  if (!q || opts.length < 2 || !correct) {
-    state.msg = { type: "err", text: "Συμπλήρωσε ερώτηση, τουλάχιστον 2 απαντήσεις, και τη σωστή." };
+  if (!q || opts.length < 2) {
+    state.msg = { type: "err", text: "Συμπλήρωσε ερώτηση και τουλάχιστον 2 απαντήσεις." };
     render(); return;
   }
-  if (!opts.includes(correct)) {
-    state.msg = { type: "err", text: "Η σωστή απάντηση πρέπει να υπάρχει στις επιλογές." };
+  if (!correctIdx || correctIdx < 1 || correctIdx > 4 || !opts[correctIdx - 1]) {
+    state.msg = { type: "err", text: "Επίλεξε ποια απάντηση είναι η σωστή (1-4)." };
     render(); return;
   }
 
+  const correct = opts[correctIdx - 1];
   const wrongOpts = opts.filter(o => o !== correct);
   try {
     if (state.editingId) {
@@ -398,7 +414,7 @@ window.editQuestion = function(id) {
     document.getElementById("fb").value = allOpts[1] || "";
     document.getElementById("fc").value = allOpts[2] || "";
     document.getElementById("fd").value = allOpts[3] || "";
-    document.getElementById("fcorrect").value = q.a;
+    document.getElementById("fcorrect").value = "1";
   }, 50);
 };
 
