@@ -215,7 +215,12 @@ function parseExcel(file) {
               const imgFile = String(row[6] || "").trim();
               const entry = { q, a: correctAnswer, o: wrongOpts };
               if (imgFile) {
-                const match = state.images.find(img => img.name.toLowerCase().includes(imgFile.toLowerCase()) || imgFile.toLowerCase().includes(img.name.split("_").slice(1).join("_").toLowerCase()));
+                const imgLower = imgFile.toLowerCase().replace(/\s+/g, "");
+                const match = state.images.find(img => {
+                  const storedName = img.name.toLowerCase().replace(/\s+/g, "");
+                  const storedOriginal = storedName.replace(/^\d+_/, "");
+                  return storedName === imgLower || storedOriginal === imgLower || storedName.includes(imgLower) || storedOriginal.includes(imgLower);
+                });
                 if (match) entry.imageUrl = match.url;
                 else entry._imgFile = imgFile;
               }
