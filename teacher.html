@@ -270,7 +270,7 @@ function renderQuestions() {
         </div>
       </div>
     `).join("");
-    list = `<div class="card"><h2>${MI("list",20)} Ερωτήσεις (${state.questions.length})</h2><div class="q-list">${items}</div></div>`;
+    list = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h2 style="margin:0">${MI("list",20)} Ερωτήσεις (${state.questions.length})</h2><button class="btn btn-danger btn-sm" onclick="confirmDeleteAll()">${MI("delete_sweep",14)} Διαγραφή όλων</button></div><div class="q-list">${items}</div></div>`;
   }
   return form + list;
 }
@@ -429,6 +429,20 @@ window.confirmDelete = async function(id) {
   try {
     await deleteQuestion(id);
     state.msg = { type: "ok", text: "Ερώτηση διαγράφηκε." };
+  } catch (e) {
+    state.msg = { type: "err", text: "Σφάλμα: " + e.message };
+  }
+  render();
+};
+
+window.confirmDeleteAll = async function() {
+  if (!confirm("Σίγουρα θέλεις να διαγράψεις ΟΛΕΣ τις ερωτήσεις;")) return;
+  try {
+    const batch = db.batch();
+    state.questions.forEach(q => batch.delete(db.collection("teacherQuestions").doc(q.id)));
+    await batch.commit();
+    await loadQuestions();
+    state.msg = { type: "ok", text: "Όλες οι ερωτήσεις διαγράφηκαν." };
   } catch (e) {
     state.msg = { type: "err", text: "Σφάλμα: " + e.message };
   }
