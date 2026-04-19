@@ -1035,6 +1035,11 @@ function App() {
         </div>
 
         <div style={styles.quizCard}>
+          {q.imageUrl && (
+            <div style={{ marginBottom: 16, borderRadius: 12, overflow: "hidden", border: `2px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)"}` }}>
+              <img src={q.imageUrl} alt="" style={{ width: "100%", maxHeight: 220, objectFit: "cover", display: "block" }} />
+            </div>
+          )}
           <div style={styles.questionText}>{q.q}</div>
           {q.options.map((opt, i) => (
             <button

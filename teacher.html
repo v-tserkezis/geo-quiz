@@ -75,6 +75,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <script>
@@ -87,6 +88,7 @@ firebase.initializeApp({
   appId: "1:936223229674:web:2c96f249c30b23be52f993"
 });
 const db = firebase.firestore();
+const storage = firebase.storage();
 
 const TEACHER_PASSWORD = "geo2025";
 const MI = (name, size) => `<span class="mi" style="font-size:${size||20}px">${name}</span>`;
@@ -99,6 +101,10 @@ let state = {
   editingId: null,
   msg: null,
   preview: null,
+  images: [],
+  showImagePicker: false,
+  selectedImage: null,
+  uploadingImage: false,
 };
 
 function saveTeacherAuth() { try { sessionStorage.setItem("geo-teacher", "1"); } catch {} }
@@ -123,6 +129,38 @@ async function loadStudents() {
     }
   });
   state.students = Object.values(resultsByStudent).sort((a, b) => (b.lastPlay || 0) - (a.lastPlay || 0));
+}
+
+async function loadImages() {
+  try {
+    const listRef = storage.ref("question-images");
+    const res = await listRef.listAll();
+    const imgs = [];
+    for (const item of res.items) {
+      const url = await item.getDownloadURL();
+      imgs.push({ name: item.name, url, ref: item });
+    }
+    state.images = imgs;
+  } catch (e) { state.images = []; }
+}
+
+async function uploadImage(file) {
+  const safeName = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "");
+  const ref = storage.ref("question-images/" + safeName);
+  await ref.put(file);
+  const url = await ref.getDownloadURL();
+  state.images.push({ name: safeName, url, ref });
+  return url;
+}
+
+async function uploadMultipleImages(files) {
+  const results = [];
+  for (const file of files) {
+    if (!file.type.startsWith("image/")) continue;
+    const url = await uploadImage(file);
+    results.push({ name: file.name, url });
+  }
+  return results;
 }
 
 async function addQuestion(q) {
@@ -174,7 +212,14 @@ function parseExcel(file) {
             }
             const wrongOpts = opts.filter(o => o !== correctAnswer).slice(0, 3);
             if (wrongOpts.length > 0 && correctAnswer) {
-              questions.push({ q, a: correctAnswer, o: wrongOpts });
+              const imgFile = String(row[6] || "").trim();
+              const entry = { q, a: correctAnswer, o: wrongOpts };
+              if (imgFile) {
+                const match = state.images.find(img => img.name.toLowerCase().includes(imgFile.toLowerCase()) || imgFile.toLowerCase().includes(img.name.split("_").slice(1).join("_").toLowerCase()));
+                if (match) entry.imageUrl = match.url;
+                else entry._imgFile = imgFile;
+              }
+              questions.push(entry);
             }
           }
         }
@@ -226,6 +271,37 @@ function render() {
 }
 
 function renderQuestions() {
+  const imgPreview = state.selectedImage 
+    ? `<div style="margin-top:8px;display:flex;align-items:center;gap:10px">
+        <img src="${state.selectedImage}" style="width:80px;height:60px;object-fit:cover;border-radius:8px;border:2px solid #e2e8f0" />
+        <span style="font-size:12px;color:#059669;font-weight:600">${MI("check_circle",14)} Εικόνα επιλέχθηκε</span>
+        <button class="btn btn-danger btn-sm" onclick="clearSelectedImage()">${MI("close",14)}</button>
+      </div>` 
+    : "";
+
+  const imageGallery = state.showImagePicker 
+    ? `<div style="margin-top:10px;padding:14px;border:2px solid #e2e8f0;border-radius:12px;background:#f8fafc">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <span style="font-size:13px;font-weight:700;color:#475569">Επιλογή εικόνας</span>
+          <button class="btn btn-outline btn-sm" onclick="state.showImagePicker=false;render()">Κλείσιμο</button>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:12px">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('newImgFile').click()">${MI("add_photo_alternate",14)} Ανέβασε νέα</button>
+          <input type="file" id="newImgFile" accept="image/*" style="display:none" onchange="uploadNewImage(this.files[0])" />
+        </div>
+        ${state.uploadingImage ? `<div class="msg msg-success">${MI("hourglass_top",14)} Ανέβασμα...</div>` : ""}
+        ${state.images.length > 0 ? `
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;max-height:200px;overflow-y:auto">
+            ${state.images.map(img => `
+              <div onclick="selectImage('${img.url}')" style="cursor:pointer;border:2px solid ${state.selectedImage===img.url?'#0077b6':'#e2e8f0'};border-radius:8px;overflow:hidden;transition:all 0.2s">
+                <img src="${img.url}" style="width:100%;height:70px;object-fit:cover;display:block" title="${img.name}" />
+              </div>
+            `).join("")}
+          </div>
+        ` : `<div style="text-align:center;color:#94a3b8;font-size:13px;padding:16px">Δεν υπάρχουν εικόνες. Ανέβασε μία.</div>`}
+      </div>`
+    : "";
+
   const form = `
     <div class="card">
       <h2>${MI("add_circle",20)} ${state.editingId ? "Επεξεργασία" : "Νέα ερώτηση"}</h2>
@@ -246,6 +322,12 @@ function renderQuestions() {
           <option value="4">4 - Απάντηση Δ</option>
         </select>
       </div>
+      <div class="form-group">
+        <label>${MI("image",14)} Εικόνα (προαιρετικό)</label>
+        <button class="btn btn-outline btn-sm" onclick="toggleImagePicker()" style="margin-top:4px">${state.showImagePicker ? MI("expand_less",14)+" Κλείσε" : MI("add_photo_alternate",14)+" Προσθήκη εικόνας"}</button>
+        ${imgPreview}
+        ${imageGallery}
+      </div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary" onclick="saveQuestion()">${MI("save",16)} ${state.editingId ? "Ενημέρωση" : "Αποθήκευση"}</button>
         ${state.editingId ? `<button class="btn btn-outline" onclick="cancelEdit()">Ακύρωση</button>` : ""}
@@ -259,6 +341,7 @@ function renderQuestions() {
   } else {
     const items = state.questions.map(q => `
       <div class="q-item">
+        ${q.imageUrl ? `<img src="${q.imageUrl}" style="width:50px;height:40px;object-fit:cover;border-radius:6px;flex-shrink:0" />` : ""}
         <div class="q-text">
           <div class="q-question">${q.q}</div>
           <div class="q-answer">${MI("check_circle",14)} ${q.a}</div>
@@ -300,18 +383,47 @@ function renderUpload() {
     <div class="card">
       <h2>${MI("upload_file",20)} Upload Excel</h2>
       <p style="font-size:13px;color:#64748b;margin-bottom:16px">
-        Μορφή: Στήλη A = Ερώτηση, B-E = Απαντήσεις, F = Σωστή απάντηση. Η πρώτη γραμμή (header) αγνοείται.
+        Μορφή: A = Ερώτηση, B-E = Απαντήσεις, F = Σωστή (1-4), G = Filename εικόνας (προαιρετικό). Header αγνοείται.
       </p>
       <div class="drop-zone" id="dropzone" onclick="document.getElementById('fileInput').click()"
         ondragover="event.preventDefault();this.classList.add('dragover')"
         ondragleave="this.classList.remove('dragover')"
         ondrop="event.preventDefault();this.classList.remove('dragover');handleFile(event.dataTransfer.files[0])">
         ${MI("upload_file",40)}
-        <p>Σύρε αρχείο εδώ ή κάνε κλικ</p>
+        <p>Σύρε Excel εδώ ή κάνε κλικ</p>
         <small>.xlsx ή .xls</small>
       </div>
       <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" onchange="handleFile(this.files[0])" />
       ${state.msg && state.tab === "upload" ? `<div class="msg ${state.msg.type==="ok"?"msg-success":"msg-error"}">${state.msg.text}</div>` : ""}
+    </div>
+
+    <div class="card">
+      <h2>${MI("photo_library",20)} Μαζικό ανέβασμα εικόνων</h2>
+      <p style="font-size:13px;color:#64748b;margin-bottom:16px">
+        Ανέβασε εικόνες που αντιστοιχούν στα filenames στη στήλη G του Excel.
+      </p>
+      <div class="drop-zone" onclick="document.getElementById('bulkImgInput').click()"
+        ondragover="event.preventDefault();this.classList.add('dragover')"
+        ondragleave="this.classList.remove('dragover')"
+        ondrop="event.preventDefault();this.classList.remove('dragover');handleBulkImages(event.dataTransfer.files)">
+        ${MI("add_photo_alternate",40)}
+        <p>Σύρε εικόνες εδώ ή κάνε κλικ</p>
+        <small>Πολλαπλά αρχεία (.jpg, .png, .webp)</small>
+      </div>
+      <input type="file" id="bulkImgInput" accept="image/*" multiple style="display:none" onchange="handleBulkImages(this.files)" />
+      ${state.images.length > 0 ? `
+        <div style="margin-top:12px">
+          <div style="font-size:13px;font-weight:700;color:#475569;margin-bottom:8px">${MI("cloud_done",14)} Αποθηκευμένες εικόνες (${state.images.length})</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px">
+            ${state.images.map(img => `
+              <div style="border:2px solid #e2e8f0;border-radius:8px;overflow:hidden;position:relative">
+                <img src="${img.url}" style="width:100%;height:70px;object-fit:cover;display:block" />
+                <div style="padding:4px;font-size:10px;color:#64748b;word-break:break-all;background:#f8fafc">${img.name}</div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      ` : ""}
     </div>
     ${previewHTML}
   `;
@@ -345,7 +457,7 @@ window.doLogin = function() {
     state.loggedIn = true;
     state.msg = null;
     saveTeacherAuth();
-    loadQuestions().then(() => loadStudents()).then(render);
+    Promise.all([loadQuestions(), loadStudents(), loadImages()]).then(render);
   } else {
     state.msg = "Λάθος κωδικός";
     render();
@@ -387,14 +499,19 @@ window.saveQuestion = async function() {
 
   const correct = opts[correctIdx - 1];
   const wrongOpts = opts.filter(o => o !== correct);
+  const questionData = { q, a: correct, o: wrongOpts };
+  if (state.selectedImage) questionData.imageUrl = state.selectedImage;
+  else questionData.imageUrl = null;
   try {
     if (state.editingId) {
-      await updateQuestion(state.editingId, { q, a: correct, o: wrongOpts });
+      await updateQuestion(state.editingId, questionData);
     } else {
-      await addQuestion({ q, a: correct, o: wrongOpts });
+      await addQuestion(questionData);
     }
     state.msg = { type: "ok", text: state.editingId ? "Ερώτηση ενημερώθηκε!" : "Ερώτηση προστέθηκε!" };
     state.editingId = null;
+    state.selectedImage = null;
+    state.showImagePicker = false;
   } catch (e) {
     state.msg = { type: "err", text: "Σφάλμα: " + e.message };
   }
@@ -406,6 +523,8 @@ window.editQuestion = function(id) {
   if (!q) return;
   state.editingId = id;
   state.msg = null;
+  state.selectedImage = q.imageUrl || null;
+  state.showImagePicker = false;
   render();
   setTimeout(() => {
     document.getElementById("fq").value = q.q;
@@ -443,6 +562,51 @@ window.confirmDeleteAll = async function() {
     await batch.commit();
     await loadQuestions();
     state.msg = { type: "ok", text: "Όλες οι ερωτήσεις διαγράφηκαν." };
+  } catch (e) {
+    state.msg = { type: "err", text: "Σφάλμα: " + e.message };
+  }
+  render();
+};
+
+window.toggleImagePicker = function() {
+  state.showImagePicker = !state.showImagePicker;
+  render();
+};
+
+window.selectImage = function(url) {
+  state.selectedImage = url;
+  state.showImagePicker = false;
+  render();
+};
+
+window.clearSelectedImage = function() {
+  state.selectedImage = null;
+  render();
+};
+
+window.uploadNewImage = async function(file) {
+  if (!file) return;
+  state.uploadingImage = true;
+  render();
+  try {
+    const url = await uploadImage(file);
+    state.selectedImage = url;
+    state.uploadingImage = false;
+    state.showImagePicker = false;
+  } catch (e) {
+    state.msg = { type: "err", text: "Σφάλμα upload: " + e.message };
+    state.uploadingImage = false;
+  }
+  render();
+};
+
+window.handleBulkImages = async function(files) {
+  if (!files || files.length === 0) return;
+  state.msg = { type: "ok", text: `Ανέβασμα ${files.length} εικόνων...` };
+  render();
+  try {
+    const results = await uploadMultipleImages(Array.from(files));
+    state.msg = { type: "ok", text: `${results.length} εικόνες ανέβηκαν!` };
   } catch (e) {
     state.msg = { type: "err", text: "Σφάλμα: " + e.message };
   }
@@ -488,7 +652,7 @@ window.cancelPreview = function() {
 // ─── INIT ────────────────────────────────────────────────
 if (checkTeacherAuth()) {
   state.loggedIn = true;
-  loadQuestions().then(() => loadStudents()).then(render);
+  Promise.all([loadQuestions(), loadStudents(), loadImages()]).then(render);
 } else {
   render();
 }
