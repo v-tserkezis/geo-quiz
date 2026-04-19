@@ -17,6 +17,20 @@
 <body>
   <div id="root"><div class="loading">Φόρτωση...</div></div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script>
+    firebase.initializeApp({
+      apiKey: "AIzaSyB5EzqHVtXZoIp2kNngl80nMC_A2RkvFw8",
+      authDomain: "geo-quiz-2bcd5.firebaseapp.com",
+      projectId: "geo-quiz-2bcd5",
+      storageBucket: "geo-quiz-2bcd5.firebasestorage.app",
+      messagingSenderId: "936223229674",
+      appId: "1:936223229674:web:2c96f249c30b23be52f993"
+    });
+    var fbDb = firebase.firestore();
+  </script>
+
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -127,6 +141,10 @@ const T = {
     aiGenerating: "Δημιουργία ερωτήσεων...",
     aiError: "Σφάλμα AI, χρήση τοπικών ερωτήσεων",
     aiDelete: "Διαγραφή",
+    studentName: "Όνομα μαθητή",
+    studentNamePlaceholder: "π.χ. Γιάννης",
+    teacherQuestions: "Ερωτήσεις Δασκάλου",
+    noTeacherQuestions: "Δεν υπάρχουν ερωτήσεις δασκάλου",
   },
   en: {
     appTitle: "GeoLearn",
@@ -193,6 +211,10 @@ const T = {
     aiGenerating: "Generating questions...",
     aiError: "AI error, using local questions",
     aiDelete: "Delete",
+    studentName: "Student name",
+    studentNamePlaceholder: "e.g. John",
+    teacherQuestions: "Teacher's Questions",
+    noTeacherQuestions: "No teacher questions available",
   },
 };
 
@@ -323,6 +345,8 @@ function App() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiKeyInput, setAiKeyInput] = useState("");
   const [aiStatus, setAiStatus] = useState("");
+  const [studentName, setStudentName] = useState("");
+  const [teacherQuestions, setTeacherQuestions] = useState([]);
   const t = T[lang];
   const skin = SKINS[skinIdx];
 
@@ -376,6 +400,16 @@ function App() {
         setAiApiKey(oldKey); setAiKeyInput(oldKey); setAiStatus("ok");
         if (savedAiMode !== "off") setAiMode(true);
       }
+      // Load student name
+      const savedName = localStorage.getItem("geo-quiz-student-name");
+      if (savedName) setStudentName(savedName);
+    } catch {}
+    // Load teacher questions from Firebase
+    try {
+      fbDb.collection("teacherQuestions").orderBy("createdAt", "desc").get().then(snap => {
+        const tq = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setTeacherQuestions(tq);
+      }).catch(() => {});
     } catch {}
   }, []);
 
@@ -462,6 +496,18 @@ function App() {
         },
       };
       saveProgress(newP);
+      // Submit to Firebase
+      try {
+        fbDb.collection("studentResults").add({
+          studentName: studentName || "Anonymous",
+          category: key,
+          score: score,
+          total: questions.length,
+          pct: Math.round(pct * 100),
+          stars: stars,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => {});
+      } catch {}
       setScreen("results");
       return;
     }
@@ -841,6 +887,55 @@ function App() {
             );
           })}
         </div>
+
+        {/* Teacher Questions section */}
+        {teacherQuestions.length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, opacity: 0.7, textAlign: "center" }}>
+              {t.teacherQuestions}
+            </div>
+            <div
+              style={{
+                background: cardBg,
+                borderRadius: 20,
+                padding: "22px 24px",
+                cursor: "pointer",
+                border: `2px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`,
+                transition: "all 0.25s",
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+                boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.3)" : "0 2px 12px rgba(0,0,0,0.06)",
+              }}
+              onClick={() => {
+                const shuffled = [...teacherQuestions].sort(() => Math.random() - 0.5).slice(0, Math.min(questionsPerRound, teacherQuestions.length));
+                const prepared = shuffled.map((q) => {
+                  const options = [...(q.o || []), q.a].sort(() => Math.random() - 0.5);
+                  return { ...q, options };
+                });
+                setCurrentCat({ region: "teacher", sub: "custom", labelKey: "teacherQuestions" });
+                setQuestions(prepared);
+                setQIdx(0);
+                setScore(0);
+                setSelectedAns(null);
+                setAnswered(false);
+                setScreen("quiz");
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-3px) scale(1.01)"; e.currentTarget.style.boxShadow = `0 8px 28px ${accentColor}33`; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; }}
+            >
+              <div style={{ lineHeight: 1 }}><MI name="school" size={42} color={accentColor} /></div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: accentColor }}>{t.teacherQuestions}</div>
+                <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>
+                  {teacherQuestions.length} {lang === "el" ? "ερωτήσεις" : "questions"}
+                </div>
+              </div>
+              <div><MI name="play_arrow" size={28} color={accentColor} /></div>
+            </div>
+          </div>
+        )}
+
       </div>
     );
   };
@@ -1003,7 +1098,7 @@ function App() {
           </div>
           <div style={styles.resultMsg}>{msg}</div>
           <div style={styles.btnRow}>
-            <button style={styles.outlineBtn} onClick={() => setScreen("subcategory")}>{t.backToMenu}</button>
+            <button style={styles.outlineBtn} onClick={() => setScreen(currentCat && currentCat.region === "teacher" ? "menu" : "subcategory")}>{t.backToMenu}</button>
             <button style={styles.nextBtn} onClick={() => startQuiz(currentCat)}>{t.playAgain}</button>
           </div>
         </div>
@@ -1046,6 +1141,26 @@ function App() {
               display: "flex", alignItems: "center", justifyContent: "center", color: textColor,
             }}
           ><MI name="close" size={20} /></button>
+        </div>
+
+        {/* Student Name */}
+        <div style={styles.settingsRow}>
+          <span style={styles.settingsLabel}><MI name="person" size={16} /> {t.studentName}</span>
+          <input
+            type="text"
+            value={studentName}
+            onChange={(e) => {
+              setStudentName(e.target.value);
+              try { localStorage.setItem("geo-quiz-student-name", e.target.value); } catch {}
+            }}
+            placeholder={t.studentNamePlaceholder}
+            style={{
+              padding: "7px 14px", borderRadius: 12, fontSize: 14, fontWeight: 600, width: 160,
+              border: `2px solid ${isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`,
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)",
+              color: textColor, fontFamily: "inherit", outline: "none",
+            }}
+          />
         </div>
 
         {/* Language */}
@@ -1243,7 +1358,10 @@ function App() {
           {screen !== "menu" && (
             <button style={styles.settingsBtn} onClick={() => {
               if (screen === "settings") setScreen("menu");
-              else if (screen === "quiz" || screen === "results") setScreen("subcategory");
+              else if (screen === "quiz" || screen === "results") {
+                if (currentCat && currentCat.region === "teacher") setScreen("menu");
+                else setScreen("subcategory");
+              }
               else if (screen === "subcategory") setScreen("menu");
             }}>
               <MI name="arrow_back" size={18} />

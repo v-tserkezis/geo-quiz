@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Γεωμάθηση — Teacher Panel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Nunito', sans-serif; background: #f0f4f8; color: #1a2332; min-height: 100vh; }
+    .mi { font-family: 'Material Symbols Rounded'; font-variation-settings: 'FILL' 1, 'wght' 500; vertical-align: middle; line-height: 1; }
+    .app { max-width: 800px; margin: 0 auto; padding: 16px; }
+    .header { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; margin-bottom: 16px; }
+    .header h1 { font-size: 24px; font-weight: 900; color: #0077b6; display: flex; align-items: center; gap: 10px; }
+    .header h1 small { font-size: 13px; font-weight: 600; color: #666; }
+    .logout-btn { background: none; border: 2px solid #ddd; border-radius: 10px; padding: 8px 16px; cursor: pointer; font-family: inherit; font-weight: 700; font-size: 13px; color: #666; display: flex; align-items: center; gap: 4px; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; background: #e2e8f0; border-radius: 14px; padding: 4px; }
+    .tab { flex: 1; padding: 10px; text-align: center; border-radius: 10px; border: none; background: transparent; cursor: pointer; font-family: inherit; font-weight: 700; font-size: 14px; color: #64748b; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .tab.active { background: #fff; color: #0077b6; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .card { background: #fff; border-radius: 16px; padding: 24px; margin-bottom: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+    .card h2 { font-size: 18px; font-weight: 800; margin-bottom: 16px; color: #0077b6; display: flex; align-items: center; gap: 8px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; color: #475569; }
+    .form-group input, .form-group textarea { width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 10px; font-family: inherit; font-size: 14px; outline: none; transition: border-color 0.2s; }
+    .form-group input:focus, .form-group textarea:focus { border-color: #0077b6; }
+    .btn { padding: 10px 20px; border-radius: 10px; border: none; font-family: inherit; font-weight: 700; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s; }
+    .btn-primary { background: #0077b6; color: #fff; }
+    .btn-primary:hover { background: #005f8a; }
+    .btn-danger { background: #fee2e2; color: #dc2626; }
+    .btn-danger:hover { background: #fecaca; }
+    .btn-outline { background: transparent; border: 2px solid #e2e8f0; color: #475569; }
+    .btn-outline:hover { border-color: #0077b6; color: #0077b6; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    .q-list { display: flex; flex-direction: column; gap: 8px; }
+    .q-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border: 2px solid #f1f5f9; border-radius: 12px; transition: all 0.2s; }
+    .q-item:hover { border-color: #e2e8f0; }
+    .q-item .q-text { flex: 1; }
+    .q-item .q-question { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+    .q-item .q-answer { font-size: 12px; color: #06d6a0; font-weight: 600; }
+    .q-item .q-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .student-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 2px solid #f1f5f9; border-radius: 12px; margin-bottom: 8px; }
+    .student-row .name { flex: 1; font-weight: 700; font-size: 14px; }
+    .student-row .stat { font-size: 12px; color: #64748b; font-weight: 600; text-align: center; min-width: 60px; }
+    .student-row .stat span { display: block; font-size: 18px; font-weight: 800; color: #1a2332; }
+    .drop-zone { border: 3px dashed #cbd5e1; border-radius: 14px; padding: 32px; text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 16px; }
+    .drop-zone:hover, .drop-zone.dragover { border-color: #0077b6; background: #f0f9ff; }
+    .drop-zone .mi { font-size: 40px; color: #94a3b8; display: block; margin-bottom: 8px; }
+    .drop-zone p { font-size: 14px; color: #64748b; font-weight: 600; }
+    .drop-zone small { font-size: 12px; color: #94a3b8; }
+    .preview-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
+    .preview-table th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-weight: 700; color: #475569; }
+    .preview-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
+    .preview-table tr:hover td { background: #f8fafc; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; }
+    .badge-green { background: #d1fae5; color: #059669; }
+    .badge-blue { background: #dbeafe; color: #2563eb; }
+    .badge-gray { background: #f1f5f9; color: #64748b; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #94a3b8; }
+    .empty-state .mi { font-size: 48px; display: block; margin-bottom: 12px; }
+    .empty-state p { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+    .empty-state small { font-size: 13px; }
+    .login-card { max-width: 360px; margin: 80px auto; text-align: center; }
+    .login-card h1 { font-size: 28px; color: #0077b6; margin-bottom: 8px; }
+    .login-card p { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+    .msg { padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+    .msg-success { background: #d1fae5; color: #059669; }
+    .msg-error { background: #fee2e2; color: #dc2626; }
+    .footer { text-align: center; padding: 24px 0; font-size: 11px; color: #94a3b8; font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div class="footer">Powered by Vassilis Tserkezis</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyB5EzqHVtXZoIp2kNngl80nMC_A2RkvFw8",
+  authDomain: "geo-quiz-2bcd5.firebaseapp.com",
+  projectId: "geo-quiz-2bcd5",
+  storageBucket: "geo-quiz-2bcd5.firebasestorage.app",
+  messagingSenderId: "936223229674",
+  appId: "1:936223229674:web:2c96f249c30b23be52f993"
+});
+const db = firebase.firestore();
+
+const TEACHER_PASSWORD = "geo2025";
+const MI = (name, size) => `<span class="mi" style="font-size:${size||20}px">${name}</span>`;
+
+let state = {
+  loggedIn: false,
+  tab: "questions",
+  questions: [],
+  students: [],
+  editingId: null,
+  msg: null,
+  preview: null,
+};
+
+function saveTeacherAuth() { try { sessionStorage.setItem("geo-teacher", "1"); } catch {} }
+function checkTeacherAuth() { try { return sessionStorage.getItem("geo-teacher") === "1"; } catch { return false; } }
+
+async function loadQuestions() {
+  const snap = await db.collection("teacherQuestions").orderBy("createdAt", "desc").get();
+  state.questions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function loadStudents() {
+  const snap = await db.collection("studentResults").orderBy("timestamp", "desc").get();
+  const resultsByStudent = {};
+  snap.docs.forEach(d => {
+    const data = d.data();
+    const name = data.studentName || "Anonymous";
+    if (!resultsByStudent[name]) resultsByStudent[name] = { name, results: [], totalStars: 0, lastPlay: null };
+    resultsByStudent[name].results.push(data);
+    resultsByStudent[name].totalStars += data.stars || 0;
+    if (!resultsByStudent[name].lastPlay || data.timestamp?.toDate() > resultsByStudent[name].lastPlay) {
+      resultsByStudent[name].lastPlay = data.timestamp?.toDate();
+    }
+  });
+  state.students = Object.values(resultsByStudent).sort((a, b) => (b.lastPlay || 0) - (a.lastPlay || 0));
+}
+
+async function addQuestion(q) {
+  await db.collection("teacherQuestions").add({ ...q, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  await loadQuestions();
+}
+
+async function deleteQuestion(id) {
+  await db.collection("teacherQuestions").doc(id).delete();
+  await loadQuestions();
+}
+
+async function updateQuestion(id, q) {
+  await db.collection("teacherQuestions").doc(id).update(q);
+  state.editingId = null;
+  await loadQuestions();
+}
+
+async function addBulkQuestions(questions) {
+  const batch = db.batch();
+  questions.forEach(q => {
+    const ref = db.collection("teacherQuestions").doc();
+    batch.set(ref, { ...q, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  });
+  await batch.commit();
+  await loadQuestions();
+}
+
+function parseExcel(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        const questions = [];
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || !row[0] || String(row[0]).trim() === "" || String(row[0]).toLowerCase().startsWith("ερώτ") || String(row[0]).toLowerCase().startsWith("question")) continue;
+          const q = String(row[0] || "").trim();
+          const opts = [String(row[1]||"").trim(), String(row[2]||"").trim(), String(row[3]||"").trim(), String(row[4]||"").trim()].filter(Boolean);
+          const correct = String(row[5] || "").trim();
+          if (q && opts.length >= 2 && correct) {
+            const wrongOpts = opts.filter(o => o !== correct).slice(0, 3);
+            questions.push({ q, a: correct, o: wrongOpts });
+          }
+        }
+        resolve(questions);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function render() {
+  const app = document.getElementById("app");
+
+  if (!state.loggedIn) {
+    app.innerHTML = `
+      <div class="card login-card">
+        <div style="margin-bottom:20px">${MI("school", 48)}</div>
+        <h1>Γεωμάθηση</h1>
+        <p>Teacher Panel</p>
+        ${state.msg ? `<div class="msg msg-error">${state.msg}</div>` : ""}
+        <div class="form-group">
+          <input type="password" id="pwd" placeholder="Κωδικός πρόσβασης" onkeydown="if(event.key==='Enter')doLogin()" />
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="doLogin()">${MI("login",16)} Σύνδεση</button>
+      </div>
+    `;
+    return;
+  }
+
+  const questionsHTML = renderQuestions();
+  const studentsHTML = renderStudents();
+  const uploadHTML = renderUpload();
+
+  app.innerHTML = `
+    <div class="header">
+      <h1>${MI("school",28)} Γεωμάθηση <small>Teacher Panel</small></h1>
+      <button class="logout-btn" onclick="doLogout()">${MI("logout",16)} Έξοδος</button>
+    </div>
+    <div class="tabs">
+      <button class="tab ${state.tab==="questions"?"active":""}" onclick="switchTab('questions')">${MI("quiz",16)} Ερωτήσεις <span class="badge badge-blue">${state.questions.length}</span></button>
+      <button class="tab ${state.tab==="upload"?"active":""}" onclick="switchTab('upload')">${MI("upload_file",16)} Upload</button>
+      <button class="tab ${state.tab==="students"?"active":""}" onclick="switchTab('students')">${MI("group",16)} Μαθητές <span class="badge badge-gray">${state.students.length}</span></button>
+    </div>
+    ${state.tab === "questions" ? questionsHTML : ""}
+    ${state.tab === "upload" ? uploadHTML : ""}
+    ${state.tab === "students" ? studentsHTML : ""}
+  `;
+}
+
+function renderQuestions() {
+  const form = `
+    <div class="card">
+      <h2>${MI("add_circle",20)} ${state.editingId ? "Επεξεργασία" : "Νέα ερώτηση"}</h2>
+      ${state.msg ? `<div class="msg ${state.msg.type==="ok"?"msg-success":"msg-error"}">${state.msg.text}</div>` : ""}
+      <div class="form-group"><label>Ερώτηση</label><input id="fq" placeholder="π.χ. Ποια είναι η πρωτεύουσα της Γαλλίας;" /></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label>Απάντηση Α</label><input id="fa" placeholder="Επιλογή Α" /></div>
+        <div class="form-group"><label>Απάντηση Β</label><input id="fb" placeholder="Επιλογή Β" /></div>
+        <div class="form-group"><label>Απάντηση Γ</label><input id="fc" placeholder="Επιλογή Γ" /></div>
+        <div class="form-group"><label>Απάντηση Δ</label><input id="fd" placeholder="Επιλογή Δ" /></div>
+      </div>
+      <div class="form-group"><label>Σωστή απάντηση (ακριβώς όπως παραπάνω)</label><input id="fcorrect" placeholder="π.χ. Παρίσι" /></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="saveQuestion()">${MI("save",16)} ${state.editingId ? "Ενημέρωση" : "Αποθήκευση"}</button>
+        ${state.editingId ? `<button class="btn btn-outline" onclick="cancelEdit()">Ακύρωση</button>` : ""}
+      </div>
+    </div>
+  `;
+
+  let list = "";
+  if (state.questions.length === 0) {
+    list = `<div class="card"><div class="empty-state">${MI("quiz",48)}<p>Δεν υπάρχουν ερωτήσεις</p><small>Πρόσθεσε μία ή ανέβασε Excel</small></div></div>`;
+  } else {
+    const items = state.questions.map(q => `
+      <div class="q-item">
+        <div class="q-text">
+          <div class="q-question">${q.q}</div>
+          <div class="q-answer">${MI("check_circle",14)} ${q.a}</div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:2px">${(q.o||[]).join(" · ")}</div>
+        </div>
+        <div class="q-actions">
+          <button class="btn btn-outline btn-sm" onclick="editQuestion('${q.id}')">${MI("edit",14)}</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmDelete('${q.id}')">${MI("delete",14)}</button>
+        </div>
+      </div>
+    `).join("");
+    list = `<div class="card"><h2>${MI("list",20)} Ερωτήσεις (${state.questions.length})</h2><div class="q-list">${items}</div></div>`;
+  }
+  return form + list;
+}
+
+function renderUpload() {
+  let previewHTML = "";
+  if (state.preview && state.preview.length > 0) {
+    const rows = state.preview.map((q, i) => `
+      <tr><td>${i+1}</td><td>${q.q}</td><td>${q.a}</td><td>${(q.o||[]).join(", ")}</td></tr>
+    `).join("");
+    previewHTML = `
+      <div class="card">
+        <h2>${MI("preview",20)} Preview (${state.preview.length} ερωτήσεις)</h2>
+        <table class="preview-table">
+          <thead><tr><th>#</th><th>Ερώτηση</th><th>Σωστή</th><th>Λάθος επιλογές</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="confirmUpload()">${MI("cloud_upload",16)} Αποθήκευση ${state.preview.length} ερωτήσεων</button>
+          <button class="btn btn-outline" onclick="cancelPreview()">Ακύρωση</button>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="card">
+      <h2>${MI("upload_file",20)} Upload Excel</h2>
+      <p style="font-size:13px;color:#64748b;margin-bottom:16px">
+        Μορφή: Στήλη A = Ερώτηση, B-E = Απαντήσεις, F = Σωστή απάντηση. Η πρώτη γραμμή (header) αγνοείται.
+      </p>
+      <div class="drop-zone" id="dropzone" onclick="document.getElementById('fileInput').click()"
+        ondragover="event.preventDefault();this.classList.add('dragover')"
+        ondragleave="this.classList.remove('dragover')"
+        ondrop="event.preventDefault();this.classList.remove('dragover');handleFile(event.dataTransfer.files[0])">
+        ${MI("upload_file",40)}
+        <p>Σύρε αρχείο εδώ ή κάνε κλικ</p>
+        <small>.xlsx ή .xls</small>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" onchange="handleFile(this.files[0])" />
+      ${state.msg && state.tab === "upload" ? `<div class="msg ${state.msg.type==="ok"?"msg-success":"msg-error"}">${state.msg.text}</div>` : ""}
+    </div>
+    ${previewHTML}
+  `;
+}
+
+function renderStudents() {
+  if (state.students.length === 0) {
+    return `<div class="card"><div class="empty-state">${MI("group",48)}<p>Δεν υπάρχουν δεδομένα μαθητών</p><small>Θα εμφανιστούν μόλις κάποιος παίξει quiz</small></div></div>`;
+  }
+  const rows = state.students.map(s => {
+    const avg = s.results.length > 0 ? Math.round(s.results.reduce((acc, r) => acc + (r.score||0), 0) / s.results.length) : 0;
+    const lastDate = s.lastPlay ? s.lastPlay.toLocaleDateString("el-GR") : "-";
+    return `
+      <div class="student-row">
+        <div style="width:36px;height:36px;border-radius:10px;background:#e2e8f0;display:flex;align-items:center;justify-content:center;color:#64748b;font-weight:800;font-size:14px">${(s.name||"?")[0].toUpperCase()}</div>
+        <div class="name">${s.name}</div>
+        <div class="stat"><span>${s.results.length}</span>quiz</div>
+        <div class="stat"><span>${avg}%</span>μ.ο.</div>
+        <div class="stat"><span>${s.totalStars}</span>${MI("star",14)}</div>
+        <div class="stat" style="color:#94a3b8;font-size:11px">${lastDate}</div>
+      </div>
+    `;
+  }).join("");
+  return `<div class="card"><h2>${MI("group",20)} Μαθητές (${state.students.length})</h2>${rows}</div>`;
+}
+
+// ─── ACTIONS ─────────────────────────────────────────────
+window.doLogin = function() {
+  const pwd = document.getElementById("pwd").value;
+  if (pwd === TEACHER_PASSWORD) {
+    state.loggedIn = true;
+    state.msg = null;
+    saveTeacherAuth();
+    loadQuestions().then(() => loadStudents()).then(render);
+  } else {
+    state.msg = "Λάθος κωδικός";
+    render();
+  }
+};
+
+window.doLogout = function() {
+  state.loggedIn = false;
+  try { sessionStorage.removeItem("geo-teacher"); } catch {}
+  render();
+};
+
+window.switchTab = function(tab) {
+  state.tab = tab;
+  state.msg = null;
+  state.preview = null;
+  if (tab === "students") loadStudents().then(render);
+  else render();
+};
+
+window.saveQuestion = async function() {
+  const q = document.getElementById("fq").value.trim();
+  const opts = [
+    document.getElementById("fa").value.trim(),
+    document.getElementById("fb").value.trim(),
+    document.getElementById("fc").value.trim(),
+    document.getElementById("fd").value.trim(),
+  ].filter(Boolean);
+  const correct = document.getElementById("fcorrect").value.trim();
+
+  if (!q || opts.length < 2 || !correct) {
+    state.msg = { type: "err", text: "Συμπλήρωσε ερώτηση, τουλάχιστον 2 απαντήσεις, και τη σωστή." };
+    render(); return;
+  }
+  if (!opts.includes(correct)) {
+    state.msg = { type: "err", text: "Η σωστή απάντηση πρέπει να υπάρχει στις επιλογές." };
+    render(); return;
+  }
+
+  const wrongOpts = opts.filter(o => o !== correct);
+  try {
+    if (state.editingId) {
+      await updateQuestion(state.editingId, { q, a: correct, o: wrongOpts });
+    } else {
+      await addQuestion({ q, a: correct, o: wrongOpts });
+    }
+    state.msg = { type: "ok", text: state.editingId ? "Ερώτηση ενημερώθηκε!" : "Ερώτηση προστέθηκε!" };
+    state.editingId = null;
+  } catch (e) {
+    state.msg = { type: "err", text: "Σφάλμα: " + e.message };
+  }
+  render();
+};
+
+window.editQuestion = function(id) {
+  const q = state.questions.find(x => x.id === id);
+  if (!q) return;
+  state.editingId = id;
+  state.msg = null;
+  render();
+  setTimeout(() => {
+    document.getElementById("fq").value = q.q;
+    const allOpts = [q.a, ...(q.o||[])];
+    document.getElementById("fa").value = allOpts[0] || "";
+    document.getElementById("fb").value = allOpts[1] || "";
+    document.getElementById("fc").value = allOpts[2] || "";
+    document.getElementById("fd").value = allOpts[3] || "";
+    document.getElementById("fcorrect").value = q.a;
+  }, 50);
+};
+
+window.cancelEdit = function() {
+  state.editingId = null;
+  state.msg = null;
+  render();
+};
+
+window.confirmDelete = async function(id) {
+  if (!confirm("Σίγουρα θέλεις να διαγράψεις αυτή την ερώτηση;")) return;
+  try {
+    await deleteQuestion(id);
+    state.msg = { type: "ok", text: "Ερώτηση διαγράφηκε." };
+  } catch (e) {
+    state.msg = { type: "err", text: "Σφάλμα: " + e.message };
+  }
+  render();
+};
+
+window.handleFile = async function(file) {
+  if (!file) return;
+  try {
+    const questions = await parseExcel(file);
+    if (questions.length === 0) {
+      state.msg = { type: "err", text: "Δεν βρέθηκαν έγκυρες ερωτήσεις. Έλεγξε τη μορφή (A-F)." };
+      state.preview = null;
+    } else {
+      state.preview = questions;
+      state.msg = null;
+    }
+  } catch (e) {
+    state.msg = { type: "err", text: "Σφάλμα ανάγνωσης: " + e.message };
+    state.preview = null;
+  }
+  render();
+};
+
+window.confirmUpload = async function() {
+  if (!state.preview || state.preview.length === 0) return;
+  try {
+    await addBulkQuestions(state.preview);
+    state.msg = { type: "ok", text: `${state.preview.length} ερωτήσεις αποθηκεύτηκαν!` };
+    state.preview = null;
+  } catch (e) {
+    state.msg = { type: "err", text: "Σφάλμα: " + e.message };
+  }
+  render();
+};
+
+window.cancelPreview = function() {
+  state.preview = null;
+  state.msg = null;
+  render();
+};
+
+// ─── INIT ────────────────────────────────────────────────
+if (checkTeacherAuth()) {
+  state.loggedIn = true;
+  loadQuestions().then(() => loadStudents()).then(render);
+} else {
+  render();
+}
+</script>
+</body>
+</html>
