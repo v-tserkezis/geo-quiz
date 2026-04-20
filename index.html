@@ -232,7 +232,25 @@ const CATEGORIES = [
   { region: "world", sub: "rivers", labelKey: "worldRivers", icon: "volcano" },
 ];
 
-// ─── SKINS ────────────────────────────────────────────────────────────
+// ─── NORMALIZE for open-ended comparison ─────────────────────────────
+function normalizeAnswer(str) {
+  return String(str)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // αφαίρεση τόνων
+    .toLowerCase()
+    .replace(/[.,!?;:'"()\-]/g, "") // αφαίρεση στίξης
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function checkOpenAnswer(given, correct) {
+  const g = normalizeAnswer(given);
+  const c = normalizeAnswer(correct);
+  if (g === c) return true;
+  // Also accept if given contains the correct answer or vice versa (for compound answers)
+  if (g.includes(c) || c.includes(g)) return g.length >= Math.max(2, c.length - 2);
+  return false;
+}
 const SKINS = [
   { name: "Ocean", accent: "#0077b6", accentLight: "#90e0ef", bg: "#caf0f8", bgDark: "#0a1929", card: "#ffffff", cardDark: "#0d2e4a", text: "#023047", textDark: "#d4eaf7", correct: "#06d6a0", wrong: "#ef476f", star: "#ffd166" },
   { name: "Forest", accent: "#40916c", accentLight: "#95d5b2", bg: "#d8f3dc", bgDark: "#0f2818", card: "#ffffff", cardDark: "#1a3d26", text: "#1b4332", textDark: "#d4edda", correct: "#06d6a0", wrong: "#e63946", star: "#ffb703" },
@@ -515,10 +533,9 @@ function App() {
   const submitOpen = () => {
     if (answered) return;
     const q = questions[qIdx];
-    const correct = String(q.a).trim().toLowerCase();
-    const given = openAnswer.trim().toLowerCase();
+    const isRight = checkOpenAnswer(openAnswer, q.a);
     setAnswered(true);
-    if (given === correct) setScore((s) => s + 1);
+    if (isRight) setScore((s) => s + 1);
   };
 
   const nextQuestion = () => {
@@ -1068,7 +1085,7 @@ function App() {
     const correctArr = Array.isArray(q.a) ? q.a : [q.a];
     const isCorrect = qType === "single" ? selectedAns === q.a
       : qType === "multi" ? (correctArr.length === selectedMulti.length && correctArr.every(a => selectedMulti.includes(a)))
-      : openAnswer.trim().toLowerCase() === String(q.a).trim().toLowerCase();
+      : checkOpenAnswer(openAnswer, q.a);
 
     // Multi option style
     const multiOptBtn = (opt) => {
