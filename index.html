@@ -322,11 +322,18 @@ async function fetchAIQuestions(provider, apiKey, categoryLabel, count, langCode
   const prov = AI_PROVIDERS[provider];
   if (!prov || !apiKey) return null;
   const langName = langCode === "el" ? "Greek" : "English";
-  const prompt = `Generate exactly ${count} geography quiz questions about "${categoryLabel}" for elementary school children. Language: ${langName}. Mix 3 types: about 60% single choice, 20% multiple correct answers, 20% open-ended (free text answer). Return ONLY a JSON array, no markdown, no explanation. Format for each type:
-Single choice: {"type":"single","q":"question","a":"correct answer","o":["wrong1","wrong2","wrong3"]}
-Multiple correct: {"type":"multi","q":"question","a":["correct1","correct2"],"o":["wrong1","wrong2"],"allOpts":["correct1","wrong1","correct2","wrong2"]}
-Open ended: {"type":"open","q":"question","a":"correct answer","o":[]}
-All text must be in ${langName}. Make questions varied and educational.`;
+  const half = Math.floor(count / 2);
+  const prompt = `Generate exactly ${count} geography quiz questions about "${categoryLabel}" for elementary school children. Language: ${langName}.
+IMPORTANT: Generate EXACTLY ${half} single-choice questions AND EXACTLY ${half} multiple-choice questions (with 2+ correct answers). Alternate between types.
+Return ONLY a valid JSON array, no markdown, no explanation.
+
+Single choice format (EXACTLY ${half} of these):
+{"type":"single","q":"question text","a":"the one correct answer","o":["wrong1","wrong2","wrong3"]}
+
+Multiple choice format (EXACTLY ${half} of these):
+{"type":"multi","q":"question text — which ones are correct?","a":["correct1","correct2"],"o":["wrong1","wrong2"],"allOpts":["correct1","wrong1","correct2","wrong2"]}
+
+Rules: All text in ${langName}. Questions must be factually correct. Multi questions must have exactly 2 correct answers and 2 wrong answers.`;
   try {
     const reqOpts = prov.makeRequest(apiKey, prompt);
     const url = prov.url + (reqOpts.urlSuffix || "");
@@ -336,7 +343,11 @@ All text must be in ${langName}. Make questions varied and educational.`;
     const data = await res.json();
     const questions = prov.parseResponse(data);
     if (!Array.isArray(questions) || questions.length === 0) throw new Error("Empty response");
-    return questions.filter(q => q.q && q.a && Array.isArray(q.o) && q.o.length >= 3);
+    return questions.filter(q => {
+      if (!q.q || !q.a) return false;
+      if (q.type === "multi") return Array.isArray(q.a) && q.a.length >= 2 && Array.isArray(q.allOpts) && q.allOpts.length >= 3;
+      return typeof q.a === "string" && Array.isArray(q.o) && q.o.length >= 2;
+    });
   } catch (e) {
     console.error("AI fetch error:", e);
     return null;
@@ -472,12 +483,12 @@ function App() {
       if (aiQuestions && aiQuestions.length > 0) {
         const prepared = aiQuestions.map((q) => {
           const type = q.type || "single";
-          if (type === "open") return { ...q, options: [] };
+          if (type === "open") return { ...q, type, options: [] };
           if (type === "multi") {
             const allOpts = q.allOpts || [...(Array.isArray(q.a) ? q.a : [q.a]), ...(q.o || [])];
-            return { ...q, options: shuffle(allOpts) };
+            return { ...q, type, allOpts, options: shuffle([...allOpts]) };
           }
-          return { ...q, options: shuffle([q.a, ...q.o.slice(0, 3)]) };
+          return { ...q, type: "single", options: shuffle([q.a, ...(q.o || []).slice(0, 3)]) };
         });
         setQuestions(prepared);
         setQIdx(0);
