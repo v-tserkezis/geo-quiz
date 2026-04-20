@@ -106,6 +106,7 @@ let state = {
   selectedImage: null,
   uploadingImage: false,
   questionType: "single",
+  formQ: "", formA: "", formB: "", formC: "", formD: "", formCorrect: "", formOpen: "", formMulti: [],
 };
 
 function saveTeacherAuth() { try { sessionStorage.setItem("geo-teacher", "1"); } catch {} }
@@ -255,7 +256,32 @@ function parseExcel(file) {
   });
 }
 
+function saveFormState() {
+  const fq = document.getElementById("fq");
+  const fa = document.getElementById("fa");
+  const fb = document.getElementById("fb");
+  const fc = document.getElementById("fc");
+  const fd = document.getElementById("fd");
+  const fcorrect = document.getElementById("fcorrect");
+  const fopenans = document.getElementById("fopenans");
+  if (fq) state.formQ = fq.value;
+  if (fa) state.formA = fa.value;
+  if (fb) state.formB = fb.value;
+  if (fc) state.formC = fc.value;
+  if (fd) state.formD = fd.value;
+  if (fcorrect) state.formCorrect = fcorrect.value;
+  if (fopenans) state.formOpen = fopenans.value;
+  const multi = document.querySelectorAll(".fcorrect-multi:checked");
+  if (multi.length > 0) state.formMulti = Array.from(multi).map(cb => cb.value);
+}
+
+function clearFormState() {
+  state.formQ = ""; state.formA = ""; state.formB = ""; state.formC = ""; state.formD = "";
+  state.formCorrect = ""; state.formOpen = ""; state.formMulti = [];
+}
+
 function render() {
+  saveFormState();
   const app = document.getElementById("app");
 
   if (!state.loggedIn) {
@@ -329,26 +355,26 @@ function renderQuestions() {
   const qType = state.questionType || "single";
 
   const optionsHTML = qType === "open" ? `
-      <div class="form-group"><label>Σωστή απάντηση (κείμενο)</label><input id="fopenans" placeholder="π.χ. Αθήνα" /></div>
+      <div class="form-group"><label>Σωστή απάντηση (κείμενο)</label><input id="fopenans" value="${state.formOpen}" placeholder="π.χ. Αθήνα" /></div>
   ` : `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="form-group"><label>Απάντηση Α</label><input id="fa" placeholder="Επιλογή Α" /></div>
-        <div class="form-group"><label>Απάντηση Β</label><input id="fb" placeholder="Επιλογή Β" /></div>
-        <div class="form-group"><label>Απάντηση Γ</label><input id="fc" placeholder="Επιλογή Γ" /></div>
-        <div class="form-group"><label>Απάντηση Δ</label><input id="fd" placeholder="Επιλογή Δ" /></div>
+        <div class="form-group"><label>Απάντηση Α</label><input id="fa" value="${state.formA}" placeholder="Επιλογή Α" /></div>
+        <div class="form-group"><label>Απάντηση Β</label><input id="fb" value="${state.formB}" placeholder="Επιλογή Β" /></div>
+        <div class="form-group"><label>Απάντηση Γ</label><input id="fc" value="${state.formC}" placeholder="Επιλογή Γ" /></div>
+        <div class="form-group"><label>Απάντηση Δ</label><input id="fd" value="${state.formD}" placeholder="Επιλογή Δ" /></div>
       </div>
       <div class="form-group"><label>Σωστή απάντηση ${qType === "multi" ? "(πολλαπλές)" : ""}</label>
         ${qType === "multi" ? `
           <div style="display:flex;gap:12px;margin-top:6px">
-            ${["Α","Β","Γ","Δ"].map((l,i) => `<label style="display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;cursor:pointer"><input type="checkbox" class="fcorrect-multi" value="${i+1}" /> ${l}</label>`).join("")}
+            ${["Α","Β","Γ","Δ"].map((l,i) => `<label style="display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;cursor:pointer"><input type="checkbox" class="fcorrect-multi" value="${i+1}" ${state.formMulti.includes(String(i+1))?"checked":""} /> ${l}</label>`).join("")}
           </div>
         ` : `
           <select id="fcorrect" style="width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;font-size:14px;outline:none;background:#fff">
-            <option value="">-- Επίλεξε --</option>
-            <option value="1">1 - Απάντηση Α</option>
-            <option value="2">2 - Απάντηση Β</option>
-            <option value="3">3 - Απάντηση Γ</option>
-            <option value="4">4 - Απάντηση Δ</option>
+            <option value="" ${state.formCorrect===""?"selected":""}>-- Επίλεξε --</option>
+            <option value="1" ${state.formCorrect==="1"?"selected":""}>1 - Απάντηση Α</option>
+            <option value="2" ${state.formCorrect==="2"?"selected":""}>2 - Απάντηση Β</option>
+            <option value="3" ${state.formCorrect==="3"?"selected":""}>3 - Απάντηση Γ</option>
+            <option value="4" ${state.formCorrect==="4"?"selected":""}>4 - Απάντηση Δ</option>
           </select>
         `}
       </div>
@@ -365,7 +391,7 @@ function renderQuestions() {
           <button class="btn ${qType==="open"?"btn-primary":"btn-outline"} btn-sm" onclick="setQType('open')">${MI("edit_note",14)} Ανοιχτή</button>
         </div>
       </div>
-      <div class="form-group"><label>Ερώτηση</label><input id="fq" placeholder="π.χ. Ποια είναι η πρωτεύουσα της Γαλλίας;" /></div>
+      <div class="form-group"><label>Ερώτηση</label><input id="fq" value="${state.formQ}" placeholder="π.χ. Ποια είναι η πρωτεύουσα της Γαλλίας;" /></div>
       ${optionsHTML}
       <div class="form-group">
         <label>${MI("image",14)} Εικόνα (προαιρετικό)</label>
@@ -585,6 +611,7 @@ window.saveQuestion = async function() {
     state.selectedImage = null;
     state.showImagePicker = false;
     state.questionType = "single";
+    clearFormState();
   } catch (e) {
     state.msg = { type: "err", text: "Σφάλμα: " + e.message };
   }
@@ -599,31 +626,32 @@ window.editQuestion = function(id) {
   state.selectedImage = q.imageUrl || null;
   state.showImagePicker = false;
   state.questionType = q.type || "single";
-  render();
-  setTimeout(() => {
-    document.getElementById("fq").value = q.q;
-    if (q.type === "open") {
-      const el = document.getElementById("fopenans");
-      if (el) el.value = q.a || "";
+  state.formQ = q.q || "";
+  if (q.type === "open") {
+    state.formOpen = q.a || "";
+    state.formA = ""; state.formB = ""; state.formC = ""; state.formD = "";
+  } else {
+    const allOpts = q.allOpts || (Array.isArray(q.a) ? [...q.a, ...(q.o||[])] : [q.a, ...(q.o||[])]);
+    state.formA = allOpts[0] || "";
+    state.formB = allOpts[1] || "";
+    state.formC = allOpts[2] || "";
+    state.formD = allOpts[3] || "";
+    state.formOpen = "";
+    if (q.type === "multi" && Array.isArray(q.a)) {
+      state.formMulti = q.a.map(a => String(allOpts.indexOf(a) + 1));
     } else {
-      const allOpts = q.allOpts || (Array.isArray(q.a) ? [...q.a, ...(q.o||[])] : [q.a, ...(q.o||[])]);
-      ["fa","fb","fc","fd"].forEach((id, i) => { const el = document.getElementById(id); if (el) el.value = allOpts[i] || ""; });
-      if (q.type === "multi" && Array.isArray(q.a)) {
-        document.querySelectorAll(".fcorrect-multi").forEach(cb => {
-          const idx = parseInt(cb.value) - 1;
-          cb.checked = allOpts[idx] && q.a.includes(allOpts[idx]);
-        });
-      } else {
-        const el = document.getElementById("fcorrect");
-        if (el) el.value = "1";
-      }
+      state.formCorrect = "1";
     }
-  }, 50);
+  }
+  render();
 };
 
 window.cancelEdit = function() {
   state.editingId = null;
   state.msg = null;
+  state.selectedImage = null;
+  state.questionType = "single";
+  clearFormState();
   render();
 };
 
