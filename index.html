@@ -403,6 +403,10 @@ function App() {
       // Load student name
       const savedName = localStorage.getItem("geo-quiz-student-name");
       if (savedName) setStudentName(savedName);
+      // Generate device ID if not exists
+      if (!localStorage.getItem("geo-quiz-device-id")) {
+        localStorage.setItem("geo-quiz-device-id", Math.random().toString(36).substr(2, 6));
+      }
     } catch {}
     // Load teacher questions from Firebase
     try {
@@ -499,7 +503,7 @@ function App() {
       // Submit to Firebase
       try {
         fbDb.collection("studentResults").add({
-          studentName: studentName || "Anonymous",
+          studentName: studentName || ("Anonymous #" + (localStorage.getItem("geo-quiz-device-id") || "?")),
           category: key,
           score: score,
           total: questions.length,
