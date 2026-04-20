@@ -105,6 +105,7 @@ let state = {
   showImagePicker: false,
   selectedImage: null,
   uploadingImage: false,
+  questionType: "single",
 };
 
 function saveTeacherAuth() { try { sessionStorage.setItem("geo-teacher", "1"); } catch {} }
@@ -202,31 +203,49 @@ function parseExcel(file) {
           const row = rows[i];
           if (!row || !row[0] || String(row[0]).trim() === "" || String(row[0]).toLowerCase().startsWith("ερώτ") || String(row[0]).toLowerCase().startsWith("question")) continue;
           const q = String(row[0] || "").trim();
-          const opts = [String(row[1]||"").trim(), String(row[2]||"").trim(), String(row[3]||"").trim(), String(row[4]||"").trim()].filter(Boolean);
-          const correct = String(row[5] || "").trim();
-          if (q && opts.length >= 2 && correct) {
-            let correctAnswer = correct;
-            const num = parseInt(correct);
-            if (num >= 1 && num <= 4 && opts[num - 1]) {
-              correctAnswer = opts[num - 1];
-            }
-            const wrongOpts = opts.filter(o => o !== correctAnswer).slice(0, 3);
-            if (wrongOpts.length > 0 && correctAnswer) {
-              const imgFile = String(row[6] || "").trim();
-              const entry = { q, a: correctAnswer, o: wrongOpts };
-              if (imgFile) {
-                const imgLower = imgFile.toLowerCase().replace(/\s+/g, "");
-                const match = state.images.find(img => {
-                  const storedName = img.name.toLowerCase().replace(/\s+/g, "");
-                  const storedOriginal = storedName.replace(/^\d+_/, "");
-                  return storedName === imgLower || storedOriginal === imgLower || storedName.includes(imgLower) || storedOriginal.includes(imgLower);
-                });
-                if (match) entry.imageUrl = match.url;
-                else entry._imgFile = imgFile;
-              }
-              questions.push(entry);
-            }
+          const imgFile = String(row[1] || "").trim();
+          const correctRaw = String(row[2] || "").trim();
+          const opts = [];
+          for (let c = 3; c <= 10; c++) { const v = String(row[c]||"").trim(); if (v) opts.push(v); }
+          if (!q || !correctRaw) continue;
+
+          const entry = { q };
+
+          // Image matching
+          if (imgFile) {
+            const imgLower = imgFile.toLowerCase().replace(/\s+/g, "");
+            const match = state.images.find(img => {
+              const storedName = img.name.toLowerCase().replace(/\s+/g, "");
+              const storedOriginal = storedName.replace(/^\d+_/, "");
+              return storedName === imgLower || storedOriginal === imgLower || storedName.includes(imgLower) || storedOriginal.includes(imgLower);
+            });
+            if (match) entry.imageUrl = match.url;
           }
+
+          // Detect question type from column C
+          const numbersOnly = correctRaw.match(/^[\d\s,]+$/);
+          if (numbersOnly) {
+            const nums = correctRaw.split(/[,\s]+/).map(Number).filter(n => n >= 1 && n <= opts.length);
+            if (nums.length === 0) continue;
+            if (nums.length === 1) {
+              // Single choice
+              entry.type = "single";
+              entry.a = opts[nums[0] - 1];
+              entry.o = opts.filter((_, idx) => idx !== nums[0] - 1);
+            } else {
+              // Multiple choice
+              entry.type = "multi";
+              entry.a = nums.map(n => opts[n - 1]);
+              entry.o = opts.filter((_, idx) => !nums.includes(idx + 1));
+              entry.allOpts = opts;
+            }
+          } else {
+            // Open ended (text answer)
+            entry.type = "open";
+            entry.a = correctRaw;
+            entry.o = [];
+          }
+          questions.push(entry);
         }
         resolve(questions);
       } catch (err) { reject(err); }
@@ -307,26 +326,47 @@ function renderQuestions() {
       </div>`
     : "";
 
-  const form = `
-    <div class="card">
-      <h2>${MI("add_circle",20)} ${state.editingId ? "Επεξεργασία" : "Νέα ερώτηση"}</h2>
-      ${state.msg ? `<div class="msg ${state.msg.type==="ok"?"msg-success":"msg-error"}">${state.msg.text}</div>` : ""}
-      <div class="form-group"><label>Ερώτηση</label><input id="fq" placeholder="π.χ. Ποια είναι η πρωτεύουσα της Γαλλίας;" /></div>
+  const qType = state.questionType || "single";
+
+  const optionsHTML = qType === "open" ? `
+      <div class="form-group"><label>Σωστή απάντηση (κείμενο)</label><input id="fopenans" placeholder="π.χ. Αθήνα" /></div>
+  ` : `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-group"><label>Απάντηση Α</label><input id="fa" placeholder="Επιλογή Α" /></div>
         <div class="form-group"><label>Απάντηση Β</label><input id="fb" placeholder="Επιλογή Β" /></div>
         <div class="form-group"><label>Απάντηση Γ</label><input id="fc" placeholder="Επιλογή Γ" /></div>
         <div class="form-group"><label>Απάντηση Δ</label><input id="fd" placeholder="Επιλογή Δ" /></div>
       </div>
-      <div class="form-group"><label>Σωστή απάντηση</label>
-        <select id="fcorrect" style="width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;font-size:14px;outline:none;background:#fff">
-          <option value="">-- Επίλεξε --</option>
-          <option value="1">1 - Απάντηση Α</option>
-          <option value="2">2 - Απάντηση Β</option>
-          <option value="3">3 - Απάντηση Γ</option>
-          <option value="4">4 - Απάντηση Δ</option>
-        </select>
+      <div class="form-group"><label>Σωστή απάντηση ${qType === "multi" ? "(πολλαπλές)" : ""}</label>
+        ${qType === "multi" ? `
+          <div style="display:flex;gap:12px;margin-top:6px">
+            ${["Α","Β","Γ","Δ"].map((l,i) => `<label style="display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;cursor:pointer"><input type="checkbox" class="fcorrect-multi" value="${i+1}" /> ${l}</label>`).join("")}
+          </div>
+        ` : `
+          <select id="fcorrect" style="width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:10px;font-family:inherit;font-size:14px;outline:none;background:#fff">
+            <option value="">-- Επίλεξε --</option>
+            <option value="1">1 - Απάντηση Α</option>
+            <option value="2">2 - Απάντηση Β</option>
+            <option value="3">3 - Απάντηση Γ</option>
+            <option value="4">4 - Απάντηση Δ</option>
+          </select>
+        `}
       </div>
+  `;
+
+  const form = `
+    <div class="card">
+      <h2>${MI("add_circle",20)} ${state.editingId ? "Επεξεργασία" : "Νέα ερώτηση"}</h2>
+      ${state.msg ? `<div class="msg ${state.msg.type==="ok"?"msg-success":"msg-error"}">${state.msg.text}</div>` : ""}
+      <div class="form-group"><label>Τύπος ερώτησης</label>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn ${qType==="single"?"btn-primary":"btn-outline"} btn-sm" onclick="setQType('single')">${MI("radio_button_checked",14)} Μονή επιλογή</button>
+          <button class="btn ${qType==="multi"?"btn-primary":"btn-outline"} btn-sm" onclick="setQType('multi')">${MI("check_box",14)} Πολλαπλή</button>
+          <button class="btn ${qType==="open"?"btn-primary":"btn-outline"} btn-sm" onclick="setQType('open')">${MI("edit_note",14)} Ανοιχτή</button>
+        </div>
+      </div>
+      <div class="form-group"><label>Ερώτηση</label><input id="fq" placeholder="π.χ. Ποια είναι η πρωτεύουσα της Γαλλίας;" /></div>
+      ${optionsHTML}
       <div class="form-group">
         <label>${MI("image",14)} Εικόνα (προαιρετικό)</label>
         <button class="btn btn-outline btn-sm" onclick="toggleImagePicker()" style="margin-top:4px">${state.showImagePicker ? MI("expand_less",14)+" Κλείσε" : MI("add_photo_alternate",14)+" Προσθήκη εικόνας"}</button>
@@ -344,12 +384,16 @@ function renderQuestions() {
   if (state.questions.length === 0) {
     list = `<div class="card"><div class="empty-state">${MI("quiz",48)}<p>Δεν υπάρχουν ερωτήσεις</p><small>Πρόσθεσε μία ή ανέβασε Excel</small></div></div>`;
   } else {
-    const items = state.questions.map(q => `
+    const items = state.questions.map(q => {
+      const typeLabel = q.type === "multi" ? "Πολλαπλή" : q.type === "open" ? "Ανοιχτή" : "Μονή";
+      const typeBadge = `<span class="badge ${q.type==="multi"?"badge-blue":q.type==="open"?"badge-green":"badge-gray"}">${typeLabel}</span>`;
+      const correctTxt = Array.isArray(q.a) ? q.a.join(", ") : q.a;
+      return `
       <div class="q-item">
         ${q.imageUrl ? `<img src="${q.imageUrl}" style="width:50px;height:40px;object-fit:cover;border-radius:6px;flex-shrink:0" />` : ""}
         <div class="q-text">
-          <div class="q-question">${q.q}</div>
-          <div class="q-answer">${MI("check_circle",14)} ${q.a}</div>
+          <div class="q-question">${q.q} ${typeBadge}</div>
+          <div class="q-answer">${MI("check_circle",14)} ${correctTxt}</div>
           <div style="font-size:11px;color:#94a3b8;margin-top:2px">${(q.o||[]).join(" · ")}</div>
         </div>
         <div class="q-actions">
@@ -366,14 +410,16 @@ function renderQuestions() {
 function renderUpload() {
   let previewHTML = "";
   if (state.preview && state.preview.length > 0) {
-    const rows = state.preview.map((q, i) => `
-      <tr><td>${i+1}</td><td>${q.q}</td><td>${q.a}</td><td>${(q.o||[]).join(", ")}</td></tr>
-    `).join("");
+    const rows = state.preview.map((q, i) => {
+      const typeLabel = q.type === "multi" ? "Πολλαπλή" : q.type === "open" ? "Ανοιχτή" : "Μονή";
+      const correctTxt = Array.isArray(q.a) ? q.a.join(", ") : q.a;
+      return `<tr><td>${i+1}</td><td>${q.q}</td><td><span class="badge ${q.type==="multi"?"badge-blue":q.type==="open"?"badge-green":"badge-gray"}">${typeLabel}</span></td><td>${correctTxt}</td><td>${q.imageUrl ? MI("image",14) : ""}</td></tr>`;
+    }).join("");
     previewHTML = `
       <div class="card">
         <h2>${MI("preview",20)} Preview (${state.preview.length} ερωτήσεις)</h2>
         <table class="preview-table">
-          <thead><tr><th>#</th><th>Ερώτηση</th><th>Σωστή</th><th>Λάθος επιλογές</th></tr></thead>
+          <thead><tr><th>#</th><th>Ερώτηση</th><th>Τύπος</th><th>Σωστή</th><th></th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
         <div style="display:flex;gap:8px">
@@ -388,7 +434,8 @@ function renderUpload() {
     <div class="card">
       <h2>${MI("upload_file",20)} Upload Excel</h2>
       <p style="font-size:13px;color:#64748b;margin-bottom:16px">
-        Μορφή: A = Ερώτηση, B-E = Απαντήσεις, F = Σωστή (1-4), G = Filename εικόνας (προαιρετικό). Header αγνοείται.
+        Μορφή: A = Ερώτηση, B = Εικόνα (filename), C = Σωστή απάντηση, D-K = Επιλογές.<br/>
+        Στήλη C: αριθμός (π.χ. 2) = μονή, πολλαπλοί (π.χ. 1,2) = πολλαπλή, κείμενο = ανοιχτή.
       </p>
       <div class="drop-zone" id="dropzone" onclick="document.getElementById('fileInput').click()"
         ondragover="event.preventDefault();this.classList.add('dragover')"
@@ -483,30 +530,49 @@ window.switchTab = function(tab) {
   else render();
 };
 
+window.setQType = function(type) {
+  state.questionType = type;
+  render();
+};
+
 window.saveQuestion = async function() {
   const q = document.getElementById("fq").value.trim();
-  const opts = [
-    document.getElementById("fa").value.trim(),
-    document.getElementById("fb").value.trim(),
-    document.getElementById("fc").value.trim(),
-    document.getElementById("fd").value.trim(),
-  ].filter(Boolean);
-  const correctIdx = parseInt(document.getElementById("fcorrect").value);
+  const qType = state.questionType || "single";
 
-  if (!q || opts.length < 2) {
-    state.msg = { type: "err", text: "Συμπλήρωσε ερώτηση και τουλάχιστον 2 απαντήσεις." };
-    render(); return;
-  }
-  if (!correctIdx || correctIdx < 1 || correctIdx > 4 || !opts[correctIdx - 1]) {
-    state.msg = { type: "err", text: "Επίλεξε ποια απάντηση είναι η σωστή (1-4)." };
-    render(); return;
-  }
+  if (!q) { state.msg = { type: "err", text: "Συμπλήρωσε την ερώτηση." }; render(); return; }
 
-  const correct = opts[correctIdx - 1];
-  const wrongOpts = opts.filter(o => o !== correct);
-  const questionData = { q, a: correct, o: wrongOpts };
+  let questionData = { q, type: qType };
   if (state.selectedImage) questionData.imageUrl = state.selectedImage;
   else questionData.imageUrl = null;
+
+  if (qType === "open") {
+    const ans = document.getElementById("fopenans").value.trim();
+    if (!ans) { state.msg = { type: "err", text: "Συμπλήρωσε τη σωστή απάντηση." }; render(); return; }
+    questionData.a = ans;
+    questionData.o = [];
+  } else {
+    const opts = [
+      document.getElementById("fa").value.trim(),
+      document.getElementById("fb").value.trim(),
+      document.getElementById("fc").value.trim(),
+      document.getElementById("fd").value.trim(),
+    ].filter(Boolean);
+    if (opts.length < 2) { state.msg = { type: "err", text: "Χρειάζονται τουλάχιστον 2 απαντήσεις." }; render(); return; }
+
+    if (qType === "multi") {
+      const checked = Array.from(document.querySelectorAll(".fcorrect-multi:checked")).map(cb => parseInt(cb.value));
+      if (checked.length < 2) { state.msg = { type: "err", text: "Επίλεξε τουλάχιστον 2 σωστές απαντήσεις." }; render(); return; }
+      questionData.a = checked.map(n => opts[n - 1]).filter(Boolean);
+      questionData.o = opts.filter(o => !questionData.a.includes(o));
+      questionData.allOpts = opts;
+    } else {
+      const correctIdx = parseInt(document.getElementById("fcorrect").value);
+      if (!correctIdx || !opts[correctIdx - 1]) { state.msg = { type: "err", text: "Επίλεξε τη σωστή απάντηση." }; render(); return; }
+      questionData.a = opts[correctIdx - 1];
+      questionData.o = opts.filter(o => o !== questionData.a);
+    }
+  }
+
   try {
     if (state.editingId) {
       await updateQuestion(state.editingId, questionData);
@@ -517,6 +583,7 @@ window.saveQuestion = async function() {
     state.editingId = null;
     state.selectedImage = null;
     state.showImagePicker = false;
+    state.questionType = "single";
   } catch (e) {
     state.msg = { type: "err", text: "Σφάλμα: " + e.message };
   }
@@ -530,15 +597,26 @@ window.editQuestion = function(id) {
   state.msg = null;
   state.selectedImage = q.imageUrl || null;
   state.showImagePicker = false;
+  state.questionType = q.type || "single";
   render();
   setTimeout(() => {
     document.getElementById("fq").value = q.q;
-    const allOpts = [q.a, ...(q.o||[])];
-    document.getElementById("fa").value = allOpts[0] || "";
-    document.getElementById("fb").value = allOpts[1] || "";
-    document.getElementById("fc").value = allOpts[2] || "";
-    document.getElementById("fd").value = allOpts[3] || "";
-    document.getElementById("fcorrect").value = "1";
+    if (q.type === "open") {
+      const el = document.getElementById("fopenans");
+      if (el) el.value = q.a || "";
+    } else {
+      const allOpts = q.allOpts || (Array.isArray(q.a) ? [...q.a, ...(q.o||[])] : [q.a, ...(q.o||[])]);
+      ["fa","fb","fc","fd"].forEach((id, i) => { const el = document.getElementById(id); if (el) el.value = allOpts[i] || ""; });
+      if (q.type === "multi" && Array.isArray(q.a)) {
+        document.querySelectorAll(".fcorrect-multi").forEach(cb => {
+          const idx = parseInt(cb.value) - 1;
+          cb.checked = allOpts[idx] && q.a.includes(allOpts[idx]);
+        });
+      } else {
+        const el = document.getElementById("fcorrect");
+        if (el) el.value = "1";
+      }
+    }
   }, 50);
 };
 

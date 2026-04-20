@@ -304,7 +304,11 @@ async function fetchAIQuestions(provider, apiKey, categoryLabel, count, langCode
   const prov = AI_PROVIDERS[provider];
   if (!prov || !apiKey) return null;
   const langName = langCode === "el" ? "Greek" : "English";
-  const prompt = `Generate exactly ${count} multiple choice geography quiz questions about "${categoryLabel}" for elementary school children. Language: ${langName}. Return ONLY a JSON array, no markdown, no explanation. Each element: {"q":"question","a":"correct answer","o":["wrong1","wrong2","wrong3"]}. Make questions varied and educational. All text must be in ${langName}.`;
+  const prompt = `Generate exactly ${count} geography quiz questions about "${categoryLabel}" for elementary school children. Language: ${langName}. Mix 3 types: about 60% single choice, 20% multiple correct answers, 20% open-ended (free text answer). Return ONLY a JSON array, no markdown, no explanation. Format for each type:
+Single choice: {"type":"single","q":"question","a":"correct answer","o":["wrong1","wrong2","wrong3"]}
+Multiple correct: {"type":"multi","q":"question","a":["correct1","correct2"],"o":["wrong1","wrong2"],"allOpts":["correct1","wrong1","correct2","wrong2"]}
+Open ended: {"type":"open","q":"question","a":"correct answer","o":[]}
+All text must be in ${langName}. Make questions varied and educational.`;
   try {
     const reqOpts = prov.makeRequest(apiKey, prompt);
     const url = prov.url + (reqOpts.urlSuffix || "");
@@ -335,6 +339,8 @@ function App() {
   const [selectedAns, setSelectedAns] = useState(null);
   const [score, setScore] = useState(0);
   const [answered, setAnswered] = useState(false);
+  const [selectedMulti, setSelectedMulti] = useState([]);
+  const [openAnswer, setOpenAnswer] = useState("");
   const [progress, setProgress] = useState({});
   const [showReset, setShowReset] = useState(false);
   const [questionsPerRound, setQuestionsPerRound] = useState(10);
@@ -447,14 +453,21 @@ function App() {
       setAiLoading(false);
       if (aiQuestions && aiQuestions.length > 0) {
         const prepared = aiQuestions.map((q) => {
-          const options = shuffle([q.a, ...q.o.slice(0, 3)]);
-          return { ...q, options };
+          const type = q.type || "single";
+          if (type === "open") return { ...q, options: [] };
+          if (type === "multi") {
+            const allOpts = q.allOpts || [...(Array.isArray(q.a) ? q.a : [q.a]), ...(q.o || [])];
+            return { ...q, options: shuffle(allOpts) };
+          }
+          return { ...q, options: shuffle([q.a, ...q.o.slice(0, 3)]) };
         });
         setQuestions(prepared);
         setQIdx(0);
         setScore(0);
         setSelectedAns(null);
         setAnswered(false);
+        setSelectedMulti([]);
+        setOpenAnswer("");
         return;
       }
     }
@@ -463,7 +476,7 @@ function App() {
     const shuffled = shuffle(data).slice(0, Math.min(questionsPerRound, data.length));
     const prepared = shuffled.map((q) => {
       const options = shuffle([q.a, ...q.o]);
-      return { ...q, options };
+      return { ...q, type: q.type || "single", options };
     });
     setCurrentCat(cat);
     setQuestions(prepared);
@@ -471,14 +484,41 @@ function App() {
     setScore(0);
     setSelectedAns(null);
     setAnswered(false);
+    setSelectedMulti([]);
+    setOpenAnswer("");
     setScreen("quiz");
   };
 
   const handleAnswer = (ans) => {
     if (answered) return;
+    const q = questions[qIdx];
+    if (q.type === "multi") {
+      setSelectedMulti(prev => prev.includes(ans) ? prev.filter(x => x !== ans) : [...prev, ans]);
+      return;
+    }
+    if (q.type === "open") return;
+    // Single choice
     setSelectedAns(ans);
     setAnswered(true);
-    if (ans === questions[qIdx].a) setScore((s) => s + 1);
+    if (ans === q.a) setScore((s) => s + 1);
+  };
+
+  const submitMulti = () => {
+    if (answered) return;
+    const q = questions[qIdx];
+    const correct = Array.isArray(q.a) ? q.a : [q.a];
+    const isCorrect = correct.length === selectedMulti.length && correct.every(a => selectedMulti.includes(a));
+    setAnswered(true);
+    if (isCorrect) setScore((s) => s + 1);
+  };
+
+  const submitOpen = () => {
+    if (answered) return;
+    const q = questions[qIdx];
+    const correct = String(q.a).trim().toLowerCase();
+    const given = openAnswer.trim().toLowerCase();
+    setAnswered(true);
+    if (given === correct) setScore((s) => s + 1);
   };
 
   const nextQuestion = () => {
@@ -520,6 +560,8 @@ function App() {
       setQIdx((i) => i + 1);
       setSelectedAns(null);
       setAnswered(false);
+      setSelectedMulti([]);
+      setOpenAnswer("");
       setAnimating(false);
     }, 200);
   };
@@ -914,8 +956,13 @@ function App() {
               onClick={() => {
                 const shuffled = [...teacherQuestions].sort(() => Math.random() - 0.5).slice(0, Math.min(questionsPerRound, teacherQuestions.length));
                 const prepared = shuffled.map((q) => {
-                  const options = [...(q.o || []), q.a].sort(() => Math.random() - 0.5);
-                  return { ...q, options };
+                  const type = q.type || "single";
+                  if (type === "open") return { ...q, type, options: [] };
+                  if (type === "multi") {
+                    const allOpts = q.allOpts || [...(Array.isArray(q.a) ? q.a : [q.a]), ...(q.o || [])];
+                    return { ...q, type, options: allOpts.sort(() => Math.random() - 0.5) };
+                  }
+                  return { ...q, type, options: [...(q.o || []), q.a].sort(() => Math.random() - 0.5) };
                 });
                 setCurrentCat({ region: "teacher", sub: "custom", labelKey: "teacherQuestions" });
                 setQuestions(prepared);
@@ -923,6 +970,8 @@ function App() {
                 setScore(0);
                 setSelectedAns(null);
                 setAnswered(false);
+                setSelectedMulti([]);
+                setOpenAnswer("");
                 setScreen("quiz");
               }}
               onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-3px) scale(1.01)"; e.currentTarget.style.boxShadow = `0 8px 28px ${accentColor}33`; }}
@@ -1015,26 +1064,35 @@ function App() {
     );
     if (!questions.length) return null;
     const q = questions[qIdx];
-    const isCorrect = selectedAns === q.a;
+    const qType = q.type || "single";
+    const correctArr = Array.isArray(q.a) ? q.a : [q.a];
+    const isCorrect = qType === "single" ? selectedAns === q.a
+      : qType === "multi" ? (correctArr.length === selectedMulti.length && correctArr.every(a => selectedMulti.includes(a)))
+      : openAnswer.trim().toLowerCase() === String(q.a).trim().toLowerCase();
+
+    // Multi option style
+    const multiOptBtn = (opt) => {
+      const isSelected = selectedMulti.includes(opt);
+      const isRight = correctArr.includes(opt);
+      let bg2 = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.04)";
+      let border = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)";
+      let col = textColor;
+      if (answered) {
+        if (isRight) { bg2 = skin.correct + "22"; border = skin.correct; col = isDark ? "#fff" : skin.correct; }
+        else if (isSelected && !isRight) { bg2 = skin.wrong + "22"; border = skin.wrong; col = isDark ? "#fff" : skin.wrong; }
+      } else if (isSelected) { bg2 = accentColor + "15"; border = accentColor; }
+      return { width: "100%", padding: "14px 18px", borderRadius: 14, border: `2px solid ${border}`, background: bg2, color: col, fontSize: 15, fontWeight: 700, cursor: answered ? "default" : "pointer", textAlign: "left", transition: "all 0.2s", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 };
+    };
+
     return (
       <div style={styles.quizContainer}>
         <div style={styles.quizProgress}>
           <span>{t.question} {qIdx + 1} {t.of} {questions.length}</span>
           <span>{t.score}: {score}/{questions.length}</span>
         </div>
-        {/* Mini progress dots */}
         <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>
           {questions.map((_, i) => (
-            <div
-              key={i}
-              style={{
-                flex: 1,
-                height: 4,
-                borderRadius: 2,
-                background: i < qIdx ? skin.correct : i === qIdx ? accentColor : (isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"),
-                transition: "all 0.3s",
-              }}
-            />
+            <div key={i} style={{ flex: 1, height: 4, borderRadius: 2, background: i < qIdx ? skin.correct : i === qIdx ? accentColor : (isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"), transition: "all 0.3s" }} />
           ))}
         </div>
 
@@ -1044,36 +1102,77 @@ function App() {
               <img src={q.imageUrl} alt="" style={{ width: "100%", maxHeight: 220, objectFit: "cover", display: "block" }} />
             </div>
           )}
-          <div style={styles.questionText}>{q.q}</div>
-          {q.options.map((opt, i) => (
-            <button
-              key={i}
-              style={styles.optionBtn(opt)}
-              onClick={() => handleAnswer(opt)}
-            >
-              <span style={{
-                width: 28,
-                height: 28,
-                borderRadius: 8,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
-                fontSize: 12,
-                fontWeight: 800,
-                flexShrink: 0,
-              }}>
+          <div style={styles.questionText}>
+            {q.q}
+            {qType === "multi" && <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: accentColor, marginTop: 4 }}>
+              <MI name="check_box" size={14} /> {lang === "el" ? `Επίλεξε ${correctArr.length} σωστές` : `Select ${correctArr.length} correct`}
+            </span>}
+            {qType === "open" && <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: accentColor, marginTop: 4 }}>
+              <MI name="edit_note" size={14} /> {lang === "el" ? "Γράψε την απάντηση" : "Type your answer"}
+            </span>}
+          </div>
+
+          {/* SINGLE CHOICE */}
+          {qType === "single" && q.options && q.options.map((opt, i) => (
+            <button key={i} style={styles.optionBtn(opt)} onClick={() => handleAnswer(opt)}>
+              <span style={{ width: 28, height: 28, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)", fontSize: 12, fontWeight: 800, flexShrink: 0 }}>
                 {String.fromCharCode(65 + i)}
               </span>
               {opt}
             </button>
           ))}
 
+          {/* MULTIPLE CHOICE */}
+          {qType === "multi" && q.options && q.options.map((opt, i) => (
+            <button key={i} style={multiOptBtn(opt)} onClick={() => handleAnswer(opt)}>
+              <span style={{ width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", background: selectedMulti.includes(opt) ? accentColor + "30" : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)", fontSize: 14, fontWeight: 800, flexShrink: 0, border: selectedMulti.includes(opt) ? `2px solid ${accentColor}` : "2px solid transparent" }}>
+                {selectedMulti.includes(opt) ? <MI name="check" size={16} color={accentColor} /> : String.fromCharCode(65 + i)}
+              </span>
+              {opt}
+            </button>
+          ))}
+          {qType === "multi" && !answered && selectedMulti.length > 0 && (
+            <button style={styles.nextBtn} onClick={submitMulti}>
+              <MI name="check_circle" size={18} /> {lang === "el" ? "Υποβολή" : "Submit"} ({selectedMulti.length}/{correctArr.length})
+            </button>
+          )}
+
+          {/* OPEN ENDED */}
+          {qType === "open" && !answered && (
+            <div style={{ marginTop: 8 }}>
+              <input
+                type="text"
+                value={openAnswer}
+                onChange={(e) => setOpenAnswer(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && openAnswer.trim()) submitOpen(); }}
+                placeholder={lang === "el" ? "Γράψε εδώ..." : "Type here..."}
+                style={{
+                  width: "100%", padding: "14px 18px", borderRadius: 14, fontSize: 16, fontWeight: 700,
+                  border: `2px solid ${isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`,
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)",
+                  color: textColor, fontFamily: "inherit", outline: "none",
+                }}
+                autoFocus
+              />
+              {openAnswer.trim() && (
+                <button style={{ ...styles.nextBtn, marginTop: 10 }} onClick={submitOpen}>
+                  <MI name="send" size={18} /> {lang === "el" ? "Υποβολή" : "Submit"}
+                </button>
+              )}
+            </div>
+          )}
+          {qType === "open" && answered && (
+            <div style={{ marginTop: 8, padding: "12px 16px", borderRadius: 12, background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)", fontSize: 15, fontWeight: 700 }}>
+              {lang === "el" ? "Απάντησή σου:" : "Your answer:"} {openAnswer}
+            </div>
+          )}
+
+          {/* FEEDBACK (all types) */}
           {answered && (
             <>
               <div style={styles.feedback(isCorrect)}>
                 <span style={{ display: "flex", alignItems: "center", gap: 6 }}><MI name={isCorrect ? "check_circle" : "cancel"} size={20} /> {isCorrect ? t.correct : t.wrong}</span>
-                {!isCorrect && <span style={{ fontSize: 13, fontWeight: 600 }}>{t.theCorrectAnswer} {q.a}</span>}
+                {!isCorrect && <span style={{ fontSize: 13, fontWeight: 600 }}>{t.theCorrectAnswer} {Array.isArray(q.a) ? q.a.join(", ") : q.a}</span>}
               </div>
               <button style={styles.nextBtn} onClick={nextQuestion}>
                 {qIdx + 1 >= questions.length ? t.finish : t.next} <MI name="arrow_forward" size={18} />
