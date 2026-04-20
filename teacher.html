@@ -401,7 +401,8 @@ function renderQuestions() {
           <button class="btn btn-danger btn-sm" onclick="confirmDelete('${q.id}')">${MI("delete",14)}</button>
         </div>
       </div>
-    `).join("");
+    `;
+    }).join("");
     list = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h2 style="margin:0">${MI("list",20)} Ερωτήσεις (${state.questions.length})</h2><button class="btn btn-danger btn-sm" onclick="confirmDeleteAll()">${MI("delete_sweep",14)} Διαγραφή όλων</button></div><div class="q-list">${items}</div></div>`;
   }
   return form + list;
@@ -509,7 +510,7 @@ window.doLogin = function() {
     state.loggedIn = true;
     state.msg = null;
     saveTeacherAuth();
-    Promise.all([loadQuestions(), loadStudents(), loadImages()]).then(render);
+    Promise.all([loadQuestions().catch(()=>{}), loadStudents().catch(()=>{}), loadImages().catch(()=>{})]).then(render);
   } else {
     state.msg = "Λάθος κωδικός";
     render();
@@ -735,7 +736,7 @@ window.cancelPreview = function() {
 // ─── INIT ────────────────────────────────────────────────
 if (checkTeacherAuth()) {
   state.loggedIn = true;
-  Promise.all([loadQuestions(), loadStudents(), loadImages()]).then(render);
+  Promise.all([loadQuestions().catch(()=>{}), loadStudents().catch(()=>{}), loadImages().catch(()=>{})]).then(render);
 } else {
   render();
 }
