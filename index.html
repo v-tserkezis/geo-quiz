@@ -341,13 +341,30 @@ Rules: All text in ${langName}. Questions must be factually correct. Multi quest
     const res = await fetch(url, reqOpts);
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
-    const questions = prov.parseResponse(data);
-    if (!Array.isArray(questions) || questions.length === 0) throw new Error("Empty response");
-    return questions.filter(q => {
-      if (!q.q || !q.a) return false;
-      if (q.type === "multi") return Array.isArray(q.a) && q.a.length >= 2 && Array.isArray(q.allOpts) && q.allOpts.length >= 3;
+    const raw = prov.parseResponse(data);
+    if (!Array.isArray(raw) || raw.length === 0) throw new Error("Empty response");
+    // Normalize each question
+    const questions = raw.map(q => {
+      if (!q.q || !q.a) return null;
+      // If type is multi but a is a string like "Athens, Rome" → convert to array
+      if (q.type === "multi" && typeof q.a === "string" && q.a.includes(",")) {
+        q.a = q.a.split(",").map(s => s.trim()).filter(Boolean);
+      }
+      // If a is array → must be multi
+      if (Array.isArray(q.a)) {
+        q.type = "multi";
+        if (!q.allOpts) q.allOpts = [...q.a, ...(q.o || [])];
+      }
+      // Default to single
+      if (!q.type) q.type = "single";
+      return q;
+    }).filter(q => {
+      if (!q || !q.q || !q.a) return false;
+      if (q.type === "multi") return Array.isArray(q.a) && q.a.length >= 2;
       return typeof q.a === "string" && Array.isArray(q.o) && q.o.length >= 2;
     });
+    if (questions.length === 0) throw new Error("No valid questions");
+    return questions;
   } catch (e) {
     console.error("AI fetch error:", e);
     return null;
