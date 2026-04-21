@@ -201,35 +201,47 @@ function parseExcel(file) {
     reader.onload = (e) => {
       try {
         const wb = XLSX.read(e.target.result, { type: "array" });
-        // Try to find sheet matching current language
         const sheetNames = wb.SheetNames;
-        let targetSheet = wb.SheetNames[0]; // default: first sheet
-        const langHint = state.lang || "el";
-        if (langHint === "el") {
-          const found = sheetNames.find(n => n.toLowerCase().includes("ελλ") || n.toLowerCase() === "el");
-          if (found) targetSheet = found;
-        } else {
-          const found = sheetNames.find(n => n.toLowerCase().includes("english") || n.toLowerCase() === "en");
-          if (found) targetSheet = found;
-        }
-        const ws = wb.Sheets[targetSheet];
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+        // Find EL and EN sheets
+        const elName = sheetNames.find(n => n.toLowerCase().includes("ελλ") || n.toLowerCase() === "el") || sheetNames[0];
+        const enName = sheetNames.find(n => n.toLowerCase().includes("english") || n.toLowerCase() === "en");
+
+        // Parse a single sheet into row objects
+        const parseSheet = (sheetName) => {
+          if (!sheetName) return [];
+          const ws = wb.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+          const out = [];
+          for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || !row[0] || String(row[0]).trim() === "" ||
+                String(row[0]).toLowerCase().startsWith("ερώτ") ||
+                String(row[0]).toLowerCase().startsWith("question")) continue;
+            const q = String(row[0] || "").trim();
+            const imgFile = String(row[1] || "").trim();
+            const correctRaw = String(row[2] || "").trim();
+            const opts = [];
+            for (let c = 3; c <= 10; c++) { const v = String(row[c]||"").trim(); if (v) opts.push(v); }
+            if (!q || !correctRaw) continue;
+            out.push({ q, imgFile, correctRaw, opts });
+          }
+          return out;
+        };
+
+        const elRows = parseSheet(elName);
+        const enRows = enName ? parseSheet(enName) : [];
+
         const questions = [];
-        for (let i = 0; i < rows.length; i++) {
-          const row = rows[i];
-          if (!row || !row[0] || String(row[0]).trim() === "" || String(row[0]).toLowerCase().startsWith("ερώτ") || String(row[0]).toLowerCase().startsWith("question")) continue;
-          const q = String(row[0] || "").trim();
-          const imgFile = String(row[1] || "").trim();
-          const correctRaw = String(row[2] || "").trim();
-          const opts = [];
-          for (let c = 3; c <= 10; c++) { const v = String(row[c]||"").trim(); if (v) opts.push(v); }
-          if (!q || !correctRaw) continue;
+        for (let i = 0; i < elRows.length; i++) {
+          const el = elRows[i];
+          const en = enRows[i]; // index-matched with EL
 
-          const entry = { q };
+          const entry = { q: el.q };
 
-          // Image matching
-          if (imgFile) {
-            const imgLower = imgFile.toLowerCase().replace(/\s+/g, "");
+          // Image matching (same filename in EL and EN expected)
+          if (el.imgFile) {
+            const imgLower = el.imgFile.toLowerCase().replace(/\s+/g, "");
             const match = state.images.find(img => {
               const storedName = img.name.toLowerCase().replace(/\s+/g, "");
               const storedOriginal = storedName.replace(/^\d+_/, "");
@@ -238,29 +250,50 @@ function parseExcel(file) {
             if (match) entry.imageUrl = match.url;
           }
 
-          // Detect question type from column C
-          const numbersOnly = correctRaw.match(/^[\d\s,]+$/);
+          // Detect type from EL column C
+          const numbersOnly = el.correctRaw.match(/^[\d\s,]+$/);
           if (numbersOnly) {
-            const nums = correctRaw.split(/[,\s]+/).map(Number).filter(n => n >= 1 && n <= opts.length);
+            const nums = el.correctRaw.split(/[,\s]+/).map(Number).filter(n => n >= 1 && n <= el.opts.length);
             if (nums.length === 0) continue;
             if (nums.length === 1) {
-              // Single choice
               entry.type = "single";
-              entry.a = opts[nums[0] - 1];
-              entry.o = opts.filter((_, idx) => idx !== nums[0] - 1);
+              entry.a = el.opts[nums[0] - 1];
+              entry.o = el.opts.filter((_, idx) => idx !== nums[0] - 1);
             } else {
-              // Multiple choice
               entry.type = "multi";
-              entry.a = nums.map(n => opts[n - 1]);
-              entry.o = opts.filter((_, idx) => !nums.includes(idx + 1));
-              entry.allOpts = opts;
+              entry.a = nums.map(n => el.opts[n - 1]);
+              entry.o = el.opts.filter((_, idx) => !nums.includes(idx + 1));
+              entry.allOpts = el.opts;
             }
           } else {
-            // Open ended (text answer)
             entry.type = "open";
-            entry.a = correctRaw;
+            entry.a = el.correctRaw;
             entry.o = [];
           }
+
+          // Merge English version if present
+          if (en) {
+            entry.q_en = en.q;
+            if (entry.type === "open") {
+              entry.a_en = en.correctRaw;
+            } else if (en.opts.length >= 2) {
+              if (entry.type === "multi") {
+                const nums = en.correctRaw.match(/^[\d\s,]+$/) ? en.correctRaw.split(/[,\s]+/).map(Number).filter(n => n >= 1 && n <= en.opts.length) : [];
+                if (nums.length >= 2) {
+                  entry.a_en = nums.map(n => en.opts[n - 1]);
+                  entry.o_en = en.opts.filter((_, idx) => !nums.includes(idx + 1));
+                  entry.allOpts_en = en.opts;
+                }
+              } else {
+                const n = parseInt(en.correctRaw);
+                if (n >= 1 && n <= en.opts.length) {
+                  entry.a_en = en.opts[n - 1];
+                  entry.o_en = en.opts.filter((_, idx) => idx !== n - 1);
+                }
+              }
+            }
+          }
+
           questions.push(entry);
         }
         resolve(questions);
@@ -494,11 +527,13 @@ function renderUpload() {
     const rows = state.preview.map((q, i) => {
       const typeLabel = q.type === "multi" ? "Πολλαπλή" : q.type === "open" ? "Ανοιχτή" : "Μονή";
       const correctTxt = Array.isArray(q.a) ? q.a.join(", ") : q.a;
-      return `<tr><td>${i+1}</td><td>${q.q}</td><td><span class="badge ${q.type==="multi"?"badge-blue":q.type==="open"?"badge-green":"badge-gray"}">${typeLabel}</span></td><td>${correctTxt}</td><td>${q.imageUrl ? MI("image",14) : ""}</td></tr>`;
+      const enBadge = q.q_en ? `<span class="badge badge-green">${MI("translate",12)} EN</span>` : "";
+      return `<tr><td>${i+1}</td><td>${q.q}${enBadge ? " " + enBadge : ""}</td><td><span class="badge ${q.type==="multi"?"badge-blue":q.type==="open"?"badge-green":"badge-gray"}">${typeLabel}</span></td><td>${correctTxt}</td><td>${q.imageUrl ? MI("image",14) : ""}</td></tr>`;
     }).join("");
+    const enCount = state.preview.filter(q => q.q_en).length;
     previewHTML = `
       <div class="card">
-        <h2>${MI("preview",20)} Preview (${state.preview.length} ερωτήσεις)</h2>
+        <h2>${MI("preview",20)} Preview (${state.preview.length} ερωτήσεις${enCount > 0 ? `, ${enCount} με αγγλική εκδοχή` : ""})</h2>
         <table class="preview-table">
           <thead><tr><th>#</th><th>Ερώτηση</th><th>Τύπος</th><th>Σωστή</th><th></th></tr></thead>
           <tbody>${rows}</tbody>
@@ -516,17 +551,10 @@ function renderUpload() {
       <h2>${MI("upload_file",20)} Upload Excel</h2>
       <p style="font-size:13px;color:#64748b;margin-bottom:16px">
         Μορφή: A = Ερώτηση, B = Εικόνα (filename), C = Σωστή απάντηση, D-K = Επιλογές.<br/>
-        Στήλη C: αριθμός (π.χ. 2) = μονή, πολλαπλοί (π.χ. 1,2) = πολλαπλή, κείμενο = ανοιχτή.
+        Στήλη C: αριθμός (π.χ. 2) = μονή, πολλαπλοί (π.χ. 1,2) = πολλαπλή, κείμενο = ανοιχτή.<br/>
+        <span style="font-size:12px;color:#059669;font-weight:700">${MI("translate",12)} Αν υπάρχει δεύτερο sheet «English», οι αγγλικές εκδοχές εισάγονται αυτόματα.</span>
       </p>
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:13px;font-weight:700;color:#475569">${MI("translate",14)} Γλώσσα sheet:</span>
-          <div style="display:flex;background:#e2e8f0;border-radius:8px;padding:3px;gap:2px">
-            <button onclick="state.lang='el';render()" style="padding:5px 14px;border:none;border-radius:6px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;background:${state.lang==='el'?'#fff':'transparent'};color:${state.lang==='el'?'#0077b6':'#64748b'}">ΕΛ</button>
-            <button onclick="state.lang='en';render()" style="padding:5px 14px;border:none;border-radius:6px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;background:${state.lang==='en'?'#fff':'transparent'};color:${state.lang==='en'?'#0077b6':'#64748b'}">EN</button>
-          </div>
-          <span style="font-size:12px;color:#94a3b8">→ διαβάζεται sheet «${state.lang === 'el' ? 'Ελληνικά' : 'English'}»</span>
-        </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
         <a href="sample-questions.xlsx" download style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#0077b6;text-decoration:none;padding:6px 12px;border:2px solid #0077b6;border-radius:8px;background:#f0f9ff">${MI("download",14)} Δείγμα Excel</a>
       </div>
       <div class="drop-zone" id="dropzone" onclick="document.getElementById('fileInput').click()"
@@ -557,10 +585,14 @@ function renderUpload() {
       <input type="file" id="bulkImgInput" accept="image/*" multiple style="display:none" onchange="handleBulkImages(this.files)" />
       ${state.images.length > 0 ? `
         <div style="margin-top:12px">
-          <div style="font-size:13px;font-weight:700;color:#475569;margin-bottom:8px">${MI("cloud_done",14)} Αποθηκευμένες εικόνες (${state.images.length})</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-size:13px;font-weight:700;color:#475569">${MI("cloud_done",14)} Αποθηκευμένες εικόνες (${state.images.length})</div>
+            <button class="btn btn-danger btn-sm" onclick="confirmDeleteAllImages()">${MI("delete_sweep",14)} Διαγραφή όλων</button>
+          </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px">
-            ${state.images.map(img => `
+            ${state.images.map((img, idx) => `
               <div style="border:2px solid #e2e8f0;border-radius:8px;overflow:hidden;position:relative">
+                <button onclick="confirmDeleteImage(${idx})" title="Διαγραφή" style="position:absolute;top:4px;right:4px;width:24px;height:24px;padding:0;background:rgba(220,38,38,0.9);color:#fff;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2">${MI("close",14)}</button>
                 <img src="${img.url}" style="width:100%;height:70px;object-fit:cover;display:block" />
                 <div style="padding:4px;font-size:10px;color:#64748b;word-break:break-all;background:#f8fafc">${img.name}</div>
               </div>
@@ -807,6 +839,33 @@ window.handleBulkImages = async function(files) {
   try {
     const results = await uploadMultipleImages(Array.from(files));
     state.msg = { type: "ok", text: `${results.length} εικόνες ανέβηκαν!` };
+  } catch (e) {
+    state.msg = { type: "err", text: "Σφάλμα: " + e.message };
+  }
+  render();
+};
+
+window.confirmDeleteImage = async function(idx) {
+  const img = state.images[idx];
+  if (!img) return;
+  if (!confirm(`Διαγραφή εικόνας "${img.name}";`)) return;
+  try {
+    await img.ref.delete();
+    state.images.splice(idx, 1);
+    state.msg = { type: "ok", text: "Εικόνα διαγράφηκε." };
+  } catch (e) {
+    state.msg = { type: "err", text: "Σφάλμα: " + e.message };
+  }
+  render();
+};
+
+window.confirmDeleteAllImages = async function() {
+  if (state.images.length === 0) return;
+  if (!confirm(`Σίγουρα θέλεις να διαγράψεις και τις ${state.images.length} εικόνες;`)) return;
+  try {
+    await Promise.all(state.images.map(img => img.ref.delete().catch(() => {})));
+    state.images = [];
+    state.msg = { type: "ok", text: "Όλες οι εικόνες διαγράφηκαν." };
   } catch (e) {
     state.msg = { type: "err", text: "Σφάλμα: " + e.message };
   }
