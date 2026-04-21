@@ -107,6 +107,9 @@ let state = {
   uploadingImage: false,
   questionType: "single",
   formQ: "", formA: "", formB: "", formC: "", formD: "", formCorrect: "", formOpen: "", formMulti: [],
+  formQ_en: "", formA_en: "", formB_en: "", formC_en: "", formD_en: "", formOpen_en: "",
+  showEnForm: false,
+  formQen: "", formAen: "", formBen: "", formCen: "", formDen: "", formOpenen: "",
   lang: "el",
 };
 
@@ -285,11 +288,26 @@ function saveFormState() {
   if (fopenans) state.formOpen = fopenans.value;
   const multi = document.querySelectorAll(".fcorrect-multi:checked");
   if (multi.length > 0) state.formMulti = Array.from(multi).map(cb => cb.value);
+  // EN fields
+  const fqen = document.getElementById("fqen");
+  const faen = document.getElementById("faen");
+  const fben = document.getElementById("fben");
+  const fcen = document.getElementById("fcen");
+  const fden = document.getElementById("fden");
+  const fopenen = document.getElementById("fopenen");
+  if (fqen) state.formQen = fqen.value;
+  if (faen) state.formAen = faen.value;
+  if (fben) state.formBen = fben.value;
+  if (fcen) state.formCen = fcen.value;
+  if (fden) state.formDen = fden.value;
+  if (fopenen) state.formOpenen = fopenen.value;
 }
 
 function clearFormState() {
   state.formQ = ""; state.formA = ""; state.formB = ""; state.formC = ""; state.formD = "";
   state.formCorrect = ""; state.formOpen = ""; state.formMulti = [];
+  state.formQen = ""; state.formAen = ""; state.formBen = ""; state.formCen = ""; state.formDen = ""; state.formOpenen = "";
+  state.showEnForm = false;
 }
 
 function render() {
@@ -319,13 +337,7 @@ function render() {
   app.innerHTML = `
     <div class="header">
       <h1>${MI("school",28)} Γεωμάθηση <small>Teacher Panel</small></h1>
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="display:flex;background:#e2e8f0;border-radius:8px;padding:3px;gap:2px">
-          <button onclick="state.lang='el';render()" style="padding:4px 10px;border:none;border-radius:6px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;background:${state.lang==='el'?'#fff':'transparent'};color:${state.lang==='el'?'#0077b6':'#64748b'}">ΕΛ</button>
-          <button onclick="state.lang='en';render()" style="padding:4px 10px;border:none;border-radius:6px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;background:${state.lang==='en'?'#fff':'transparent'};color:${state.lang==='en'?'#0077b6':'#64748b'}">EN</button>
-        </div>
-        <button class="logout-btn" onclick="doLogout()">${MI("logout",16)} Έξοδος</button>
-      </div>
+      <button class="logout-btn" onclick="doLogout()">${MI("logout",16)} Έξοδος</button>
     </div>
     <div class="tabs">
       <button class="tab ${state.tab==="questions"?"active":""}" onclick="switchTab('questions')">${MI("quiz",16)} Ερωτήσεις <span class="badge badge-blue">${state.questions.length}</span></button>
@@ -398,6 +410,26 @@ function renderQuestions() {
       </div>
   `;
 
+  // EN options (same structure, no correct selector needed — same as EL)
+  const enOptionsHTML = qType === "open" ? `
+      <div class="form-group"><label style="color:#059669">Σωστή απάντηση (EN)</label><input id="fopenen" value="${state.formOpenen}" placeholder="e.g. Athens" /></div>
+  ` : `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label style="color:#059669">Option A (EN)</label><input id="faen" value="${state.formAen}" placeholder="Option A" /></div>
+        <div class="form-group"><label style="color:#059669">Option B (EN)</label><input id="fben" value="${state.formBen}" placeholder="Option B" /></div>
+        <div class="form-group"><label style="color:#059669">Option C (EN)</label><input id="fcen" value="${state.formCen}" placeholder="Option C" /></div>
+        <div class="form-group"><label style="color:#059669">Option D (EN)</label><input id="fden" value="${state.formDen}" placeholder="Option D" /></div>
+      </div>
+  `;
+
+  const enSection = `
+    <div style="margin-top:12px;padding:14px;border:2px solid #d1fae5;border-radius:12px;background:#f0fdf4">
+      <div style="font-size:13px;font-weight:700;color:#059669;margin-bottom:10px">${MI("translate",14)} Αγγλική έκδοση (προαιρετικό)</div>
+      <div class="form-group"><label style="color:#059669">Question (EN)</label><input id="fqen" value="${state.formQen}" placeholder="e.g. What is the capital of France?" /></div>
+      ${enOptionsHTML}
+    </div>
+  `;
+
   const form = `
     <div class="card">
       <h2>${MI("add_circle",20)} ${state.editingId ? "Επεξεργασία" : "Νέα ερώτηση"}</h2>
@@ -409,7 +441,7 @@ function renderQuestions() {
           <button class="btn ${qType==="open"?"btn-primary":"btn-outline"} btn-sm" onclick="setQType('open')">${MI("edit_note",14)} Ανοιχτή</button>
         </div>
       </div>
-      <div class="form-group"><label>Ερώτηση</label><input id="fq" value="${state.formQ}" placeholder="π.χ. Ποια είναι η πρωτεύουσα της Γαλλίας;" /></div>
+      <div class="form-group"><label>Ερώτηση (ΕΛ)</label><input id="fq" value="${state.formQ}" placeholder="π.χ. Ποια είναι η πρωτεύουσα της Γαλλίας;" /></div>
       ${optionsHTML}
       <div class="form-group">
         <label>${MI("image",14)} Εικόνα (προαιρετικό)</label>
@@ -417,6 +449,10 @@ function renderQuestions() {
         ${imgPreview}
         ${imageGallery}
       </div>
+      <button class="btn btn-outline btn-sm" onclick="state.showEnForm=!state.showEnForm;render()" style="margin-bottom:12px">
+        ${state.showEnForm ? MI("expand_less",14)+" Κρύψε αγγλική έκδοση" : MI("translate",14)+" Πρόσθεσε αγγλική έκδοση"}
+      </button>
+      ${state.showEnForm ? enSection : ""}
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary" onclick="saveQuestion()">${MI("save",16)} ${state.editingId ? "Ενημέρωση" : "Αποθήκευση"}</button>
         ${state.editingId ? `<button class="btn btn-outline" onclick="cancelEdit()">Ακύρωση</button>` : ""}
@@ -480,10 +516,19 @@ function renderUpload() {
       <h2>${MI("upload_file",20)} Upload Excel</h2>
       <p style="font-size:13px;color:#64748b;margin-bottom:16px">
         Μορφή: A = Ερώτηση, B = Εικόνα (filename), C = Σωστή απάντηση, D-K = Επιλογές.<br/>
-        Στήλη C: αριθμός (π.χ. 2) = μονή, πολλαπλοί (π.χ. 1,2) = πολλαπλή, κείμενο = ανοιχτή.<br/>
-        <span style="font-size:12px;color:#0077b6;font-weight:700">${MI("translate",12)} Θα διαβαστεί το sheet: <b>${state.lang === "el" ? "«Ελληνικά»" : "«English»"}</b> (αλλαγή γλώσσας πάνω δεξιά)</span>
-        <a href="sample-questions.xlsx" download style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:12px;font-weight:700;color:#0077b6;text-decoration:none;padding:6px 12px;border:2px solid #0077b6;border-radius:8px;background:#f0f9ff">${MI("download",14)} Κατέβασε δείγμα Excel</a>
+        Στήλη C: αριθμός (π.χ. 2) = μονή, πολλαπλοί (π.χ. 1,2) = πολλαπλή, κείμενο = ανοιχτή.
       </p>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:13px;font-weight:700;color:#475569">${MI("translate",14)} Γλώσσα sheet:</span>
+          <div style="display:flex;background:#e2e8f0;border-radius:8px;padding:3px;gap:2px">
+            <button onclick="state.lang='el';render()" style="padding:5px 14px;border:none;border-radius:6px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;background:${state.lang==='el'?'#fff':'transparent'};color:${state.lang==='el'?'#0077b6':'#64748b'}">ΕΛ</button>
+            <button onclick="state.lang='en';render()" style="padding:5px 14px;border:none;border-radius:6px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;background:${state.lang==='en'?'#fff':'transparent'};color:${state.lang==='en'?'#0077b6':'#64748b'}">EN</button>
+          </div>
+          <span style="font-size:12px;color:#94a3b8">→ διαβάζεται sheet «${state.lang === 'el' ? 'Ελληνικά' : 'English'}»</span>
+        </div>
+        <a href="sample-questions.xlsx" download style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#0077b6;text-decoration:none;padding:6px 12px;border:2px solid #0077b6;border-radius:8px;background:#f0f9ff">${MI("download",14)} Δείγμα Excel</a>
+      </div>
       <div class="drop-zone" id="dropzone" onclick="document.getElementById('fileInput').click()"
         ondragover="event.preventDefault();this.classList.add('dragover')"
         ondragleave="this.classList.remove('dragover')"
@@ -617,6 +662,29 @@ window.saveQuestion = async function() {
       if (!correctIdx || !opts[correctIdx - 1]) { state.msg = { type: "err", text: "Επίλεξε τη σωστή απάντηση." }; render(); return; }
       questionData.a = opts[correctIdx - 1];
       questionData.o = opts.filter(o => o !== questionData.a);
+    }
+  }
+
+  // Add EN translation if provided
+  if (state.formQen) {
+    questionData.q_en = state.formQen;
+    if (qType === "open") {
+      if (state.formOpenen) questionData.a_en = state.formOpenen;
+    } else {
+      const optsEn = [state.formAen, state.formBen, state.formCen, state.formDen].filter(Boolean);
+      if (optsEn.length >= 2) {
+        if (qType === "multi") {
+          const elOpts = questionData.allOpts || [];
+          const aEn = Array.isArray(questionData.a) ? questionData.a.map(a => { const i = elOpts.indexOf(a); return i >= 0 && optsEn[i] ? optsEn[i] : null; }).filter(Boolean) : [];
+          questionData.a_en = aEn.length ? aEn : [optsEn[0]];
+          questionData.o_en = optsEn.filter(o => !questionData.a_en.includes(o));
+          questionData.allOpts_en = optsEn;
+        } else {
+          const i = questionData.allOpts ? questionData.allOpts.indexOf(questionData.a) : -1;
+          questionData.a_en = i >= 0 && optsEn[i] ? optsEn[i] : optsEn[0];
+          questionData.o_en = optsEn.filter(o => o !== questionData.a_en);
+        }
+      }
     }
   }
 

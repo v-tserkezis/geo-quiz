@@ -303,8 +303,8 @@ const AI_PROVIDERS = {
   },
   google: {
     name: "Google (Gemini)",
-    model: "gemini-2.0-flash-lite",
-    url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent",
+    model: "gemini-2.0-flash",
+    url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
     makeRequest: (apiKey, prompt) => ({
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1000,7 +1000,15 @@ function App() {
               }}
               onClick={() => {
                 const shuffled = [...teacherQuestions].sort(() => Math.random() - 0.5).slice(0, Math.min(questionsPerRound, teacherQuestions.length));
-                const prepared = shuffled.map((q) => {
+                const prepared = shuffled.map((raw) => {
+                  // Pick correct language fields
+                  const q = lang === "en" && raw.q_en ? {
+                    ...raw,
+                    q: raw.q_en,
+                    a: raw.a_en || raw.a,
+                    o: raw.o_en || raw.o,
+                    allOpts: raw.allOpts_en || raw.allOpts,
+                  } : raw;
                   const type = q.type || "single";
                   if (type === "open") return { ...q, type, options: [] };
                   if (type === "multi") {
